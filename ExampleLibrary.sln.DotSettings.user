@@ -1,0 +1,13 @@
+﻿<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=7190a826_002D1f49_002D4e29_002Da73f_002D1971393a3bee/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="Validate_WithValidNote_ReturnsValid" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+  &lt;TestAncestor&gt;
+    &lt;TestId&gt;xUnit::E0EA389C-4F45-4D30-90BD-D776C28C1C6F::.NETFramework,Version=v4.8::ExampleLibrary.Tests.Validation.NoteValidatorTests&lt;/TestId&gt;
+    &lt;TestId&gt;xUnit::E0EA389C-4F45-4D30-90BD-D776C28C1C6F::.NETFramework,Version=v4.8::ExampleLibrary.Tests.Storage.S3NoteStoreTests.GetNoteAsync_WithSeededNote_ReturnsExpectedNote&lt;/TestId&gt;
+    &lt;TestId&gt;xUnit::E0EA389C-4F45-4D30-90BD-D776C28C1C6F::.NETFramework,Version=v4.8::ExampleLibrary.Tests.Storage.S3NoteStoreTests&lt;/TestId&gt;
+  &lt;/TestAncestor&gt;
+&lt;/SessionState&gt;</s:String>
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=defeafb1_002D7e45_002D446f_002Db690_002D98ddb62aaa00/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="NoteValidatorTests" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+  &lt;TestAncestor&gt;
+    &lt;TestId&gt;xUnit::E0EA389C-4F45-4D30-90BD-D776C28C1C6F::.NETFramework,Version=v4.8::ExampleLibrary.Tests.Validation.NoteValidatorTests&lt;/TestId&gt;
+  &lt;/TestAncestor&gt;
+&lt;/SessionState&gt;</s:String></wpf:ResourceDictionary>

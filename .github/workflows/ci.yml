@@ -1,0 +1,55 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+env:
+  # TODO(template): update to match your TargetFrameworks.
+  DOTNET_VERSION: '10.0.x'
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      # TODO(template): ExampleLibrary multi-targets net48;net10.0 to demonstrate the pattern, so this
+      # repo's own CI needs Mono to host the net48 test run. If you replace ExampleLibrary
+      # with a net8.0/net10.0-only project, this step can be removed.
+      - name: Setup Mono
+        run: sudo apt-get install -y mono-complete
+      - name: Restore
+        run: dotnet restore
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+      - name: Unit tests
+        run: dotnet test --configuration Release --no-build --filter "Category!=Integration"
+      # TODO(template): LocalStack block is required for this template's own example (S3NoteStore).
+      # Optional once you replace ExampleLibrary with your own project — keep, adapt to a
+      # different service, or delete. Seeding (bucket + starting note) happens automatically
+      # via docker/seed.sh, mounted as a LocalStack init hook in docker-compose.yml.
+      - name: Start LocalStack
+        run: docker compose up -d --wait
+      - name: Integration tests
+        run: dotnet test --configuration Release --no-build --filter "Category=Integration"
+      - name: Stop LocalStack
+        if: always()
+        run: docker compose down -v
+  pack:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Pack
+        run: dotnet pack --configuration Release --output ./artifacts
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: ./artifacts/*.nupkg

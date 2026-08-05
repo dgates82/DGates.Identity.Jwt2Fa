@@ -1,0 +1,18 @@
+services:
+  localstack:
+    image: localstack/localstack:3
+    container_name: dotnet-nuget-release-template-localstack
+    ports:
+      - "4566:4566"   # LocalStack edge port (all services)
+    environment:
+      - SERVICES=s3
+      - DEBUG=0
+    volumes:
+      - "./docker/localstack-data:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./docker/seed.sh:/etc/localstack/init/ready.d/seed.sh"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

@@ -1,0 +1,51 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExampleLibrary", "src\ExampleLibrary\ExampleLibrary.csproj", "{7070B5D5-71AE-4C46-ACBD-A793F362A207}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExampleLibrary.Tests", "tests\ExampleLibrary.Tests\ExampleLibrary.Tests.csproj", "{E0EA389C-4F45-4D30-90BD-D776C28C1C6F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{98B7D4BE-9FC8-4822-8D3E-C871927FA050}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docs", "Docs", "{4422CED1-2ED2-4A8A-8EF7-07AA07E3FE8F}"
+	ProjectSection(SolutionItems) = preProject
+		docs\LOCAL_DEV.md = docs\LOCAL_DEV.md
+		CONTRIBUTING.md = CONTRIBUTING.md
+		CHANGELOG.md = CHANGELOG.md
+		README.md = README.md
+		LICENSE = LICENSE
+		.gitignore = .gitignore
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Workflows", "Workflows", "{3AEA5F49-2D1B-48B1-8CED-CD74DE3F52B5}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\ci.yml = .github\workflows\ci.yml
+		.github\workflows\release.yml = .github\workflows\release.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docker", "Docker", "{59D890A4-9AFE-41EE-BDAE-54B0999BF582}"
+	ProjectSection(SolutionItems) = preProject
+		docker\seed.sh = docker\seed.sh
+		docker-compose.yml = docker-compose.yml
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7070B5D5-71AE-4C46-ACBD-A793F362A207}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7070B5D5-71AE-4C46-ACBD-A793F362A207}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7070B5D5-71AE-4C46-ACBD-A793F362A207}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7070B5D5-71AE-4C46-ACBD-A793F362A207}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E0EA389C-4F45-4D30-90BD-D776C28C1C6F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E0EA389C-4F45-4D30-90BD-D776C28C1C6F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E0EA389C-4F45-4D30-90BD-D776C28C1C6F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E0EA389C-4F45-4D30-90BD-D776C28C1C6F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{4422CED1-2ED2-4A8A-8EF7-07AA07E3FE8F} = {98B7D4BE-9FC8-4822-8D3E-C871927FA050}
+		{3AEA5F49-2D1B-48B1-8CED-CD74DE3F52B5} = {98B7D4BE-9FC8-4822-8D3E-C871927FA050}
+		{59D890A4-9AFE-41EE-BDAE-54B0999BF582} = {98B7D4BE-9FC8-4822-8D3E-C871927FA050}
+	EndGlobalSection
+EndGlobal
