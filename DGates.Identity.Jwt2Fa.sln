@@ -1,8 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExampleLibrary", "src\ExampleLibrary\ExampleLibrary.csproj", "{7070B5D5-71AE-4C46-ACBD-A793F362A207}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DGates.Identity.Jwt2Fa", "src\DGates.Identity.Jwt2Fa\DGates.Identity.Jwt2Fa.csproj", "{7070B5D5-71AE-4C46-ACBD-A793F362A207}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExampleLibrary.Tests", "tests\ExampleLibrary.Tests\ExampleLibrary.Tests.csproj", "{E0EA389C-4F45-4D30-90BD-D776C28C1C6F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DGates.Identity.Jwt2Fa.Tests", "tests\DGates.Identity.Jwt2Fa.Tests\DGates.Identity.Jwt2Fa.Tests.csproj", "{E0EA389C-4F45-4D30-90BD-D776C28C1C6F}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{98B7D4BE-9FC8-4822-8D3E-C871927FA050}"
 EndProject

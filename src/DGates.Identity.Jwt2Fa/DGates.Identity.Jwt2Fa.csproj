@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <TargetFrameworks>net48;net10.0</TargetFrameworks>
+        <TargetFramework>net10.0</TargetFramework>
         <LangVersion>latest</LangVersion>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
@@ -8,7 +8,7 @@
 
         <!-- NuGet package metadata — all values below are placeholders.
              TODO(template): update PackageId, Authors, Description, and RepositoryUrl for your project. -->
-        <PackageId>ExampleLibrary</PackageId>
+        <PackageId>DGates.Identity.Jwt2Fa</PackageId>
         <Authors>Your Name</Authors>
         <Description>Example library demonstrating this template's CI/CD and release pipeline.</Description>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -19,9 +19,9 @@
         <None Include="../../README.md" Pack="true" PackagePath="" />
     </ItemGroup>
     <ItemGroup>
-        <InternalsVisibleTo Include="ExampleLibrary.Tests" />
+        <InternalsVisibleTo Include="DGates.Identity.Jwt2Fa.Tests" />
     </ItemGroup>
     <ItemGroup>
-      <PackageReference Include="AWSSDK.S3" Version="4.0.101.3" />
+      <Folder Include="Models\" />
     </ItemGroup>
 </Project>

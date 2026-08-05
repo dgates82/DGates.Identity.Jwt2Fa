@@ -4,7 +4,6 @@ on:
     tags:
       - 'v*'
 env:
-  # TODO(template): update to match your TargetFrameworks.
   DOTNET_VERSION: '10.0.x'
 jobs:
   build-and-test:
@@ -15,11 +14,6 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
-      # TODO(template): ExampleLibrary multi-targets net48;net10.0 to demonstrate the pattern, so this
-      # repo's own CI needs Mono to host the net48 test run. If you replace ExampleLibrary
-      # with a net8.0/net10.0-only project, this step can be removed.
-      - name: Setup Mono
-        run: sudo apt-get install -y mono-complete
       - name: Restore
         run: dotnet restore
       - name: Build
