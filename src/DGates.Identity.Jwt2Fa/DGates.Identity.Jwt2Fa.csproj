@@ -22,6 +22,11 @@
         <InternalsVisibleTo Include="DGates.Identity.Jwt2Fa.Tests" />
     </ItemGroup>
     <ItemGroup>
-      <Folder Include="Models\" />
+      <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+    <ItemGroup>
+      <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
+      <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="10.0.10" />
+      <PackageReference Include="DGates.Identity.NotificationProviders" Version="1.0.0" />
     </ItemGroup>
 </Project>
