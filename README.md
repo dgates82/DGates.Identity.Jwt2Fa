@@ -53,11 +53,21 @@ interface, and it's a compile error, not a silent no-op.
 
 | Module | Registration | Requires on `TUser` | Endpoints |
 |---|---|---|---|
-| Core | `AddAuthCore<TUser>()` + `MapAuthCore<TUser>()` | nothing extra (optionally honors `IActivationPolicy<TUser>` if registered — see below) | register, login, secure, getuserbyemail, forgotpassword, resetpassword, changepassword, sendemailconfirmation, confirmEmail |
+| Core | `AddAuthCore<TUser>()` + `MapAuthCore<TUser>()` | nothing extra (optionally honors `IActivationPolicy<TUser>` if registered — see below) | register, login, secure, getuserbyemail, getuserbyid, listusers, admincreateuser, forgotpassword, resetpassword, changepassword, sendemailconfirmation, confirmEmail |
 | Two-factor | `Add2Fa<TUser>()` + `Map2Fa<TUser>()` | `IMultiFactorMethodUser` | login2fa, sendtwofacode, enableauthenticator, verifyauthenticator, resetauthenticator |
 
-Two capabilities layer on top of core as pure enhancements — neither is its own module,
-and core works fine with neither registered:
+`getuserbyid`, `listusers`, and `admincreateuser` require the `Jwt2FaPolicies.AdminOnly`
+authorization policy (`AddAuthCore` registers it, requiring the configured
+`AdminRoleName` role) rather than the self-or-admin check `getuserbyemail` uses — there's
+no "self" case for browsing all users or creating one. `admincreateuser` mirrors
+`register`: it creates the account *and* sends the confirmation/first-login email in one
+call, generating a temporary password that's discarded in favor of the emailed
+password-reset link — callers never see or need it. Note that role claims are baked into
+a JWT at login time, so promoting a user to the admin role doesn't retroactively grant
+access to a token they already hold — they need to log in again.
+
+Three capabilities layer on top of core as pure enhancements — none are their own
+module, and core works fine with none registered:
 
 **Optional activation gate.** `login` normally succeeds for any valid credentials. To
 make it reject inactive users too, register an `IActivationPolicy<TUser>` — the
@@ -70,6 +80,13 @@ policy is registered, or works the same with none at all.
 flow automatically. If not, both endpoints still work — just without that extra
 behavior.
 
+**`IRoleAwareUser` enhances the admin lookup/list endpoints.** `Jwt2FaUserProjector<TUser>`
+is synchronous and can't call `UserManager.GetRolesAsync` itself, so `getuserbyid` and
+`listusers` populate `TUser`'s `Roles` property before projecting, if `TUser` implements
+`IRoleAwareUser` — letting your projector include roles in the response without the
+package needing to know your response shape. If `TUser` doesn't implement it, both
+endpoints still work, just without roles populated.
+
 One thing worth knowing about `login2fa`: it lives in `Add2Fa`, not core, even though
 `login` (which reports a second factor is required) is core. Nothing else in the
 package can ever put a user into a 2FA-required state, so completing one is `Add2Fa`'s
@@ -78,11 +95,12 @@ job specifically.
 ## Usage
 
 ```csharp
-public class AppUser : IdentityUser, IActivatableUser, IAdminProvisionableUser, IMultiFactorMethodUser
+public class AppUser : IdentityUser, IActivatableUser, IAdminProvisionableUser, IMultiFactorMethodUser, IRoleAwareUser
 {
     public bool IsActive { get; set; } = true;
     public bool HasSetPassword { get; set; }
     public string? TwoFactorMethod { get; set; }
+    public List<string> Roles { get; set; } = new();
 }
 ```
 
@@ -96,7 +114,8 @@ builder.Services.AddAuthCore<AppUser>(builder.Configuration, user => new
 {
     user.Id,
     user.Email,
-    user.TwoFactorEnabled
+    user.TwoFactorEnabled,
+    user.Roles
 });
 builder.Services.AddDefaultActivationPolicy<AppUser>();
 builder.Services.Add2Fa<AppUser>();
@@ -120,6 +139,12 @@ embedded in the JWT's `"user"` claim and returned from auth responses — projec
 to whatever's safe to hand the client, never the raw `TUser` (password hash,
 security stamp, etc.).
 
+Every issued JWT also carries a standard `ClaimTypes.Role` claim for each of the
+user's roles, so `[Authorize(Roles = "YourRole")]` (or a `RequireRole` policy) works
+out of the box on your *own* app's endpoints and controllers — not just this
+package's. `Jwt2FaPolicies.AdminOnly`, which the admin endpoints use, is built the
+same way.
+
 ### Configuration
 
 ```json
@@ -140,9 +165,10 @@ security stamp, etc.).
 }
 ```
 
-`AdminRoleName` is the Identity role treated as "admin" for the self-or-admin checks
-used across several endpoints (e.g. an admin looking up another user's account) —
-defaults to `"Admin"`, override if your app names it differently. `FrontendBaseUrl`
+`AdminRoleName` is the Identity role treated as "admin" — for the self-or-admin checks
+on endpoints like `getuserbyemail`, and for the `Jwt2FaPolicies.AdminOnly` policy the
+admin-only endpoints require — defaults to `"Admin"`, override if your app names it
+differently. `FrontendBaseUrl`
 (no trailing slash) is combined with the two path templates to build the links
 emailed to users — only the domain is configured once; the paths (and their
 `{userId}`/`{code}` tokens) can point at whatever routes your frontend actually uses.

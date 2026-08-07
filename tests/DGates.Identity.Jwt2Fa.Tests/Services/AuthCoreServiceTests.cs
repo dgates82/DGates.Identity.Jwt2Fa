@@ -463,6 +463,105 @@ public class AuthCoreServiceTests
         Assert.Equal(Jwt2FaResultKind.BadRequest, result.Kind);
     }
 
+    [Fact]
+    public async Task GetUserByIdAsync_WithUnknownId_ReturnsNotFound()
+    {
+        _userManager.Setup(x => x.FindByIdAsync("missing")).ReturnsAsync((TestUser?)null);
+        var service = CreateService();
+
+        var result = await service.GetUserByIdAsync("missing");
+
+        Assert.Equal(Jwt2FaResultKind.NotFound, result.Kind);
+    }
+
+    [Fact]
+    public async Task GetUserByIdAsync_WithKnownId_PopulatesRolesAndReturnsProjectedUser()
+    {
+        var user = new TestUser { Id = "1", Email = Email };
+        _userManager.Setup(x => x.FindByIdAsync("1")).ReturnsAsync(user);
+        _userManager.Setup(x => x.GetRolesAsync(user)).ReturnsAsync(new List<string> { "Admin" });
+        var service = CreateService();
+
+        var result = await service.GetUserByIdAsync("1");
+
+        Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
+        Assert.NotNull(result.Value);
+        Assert.Equal(new[] { "Admin" }, user.Roles);
+    }
+
+    [Fact]
+    public async Task ListUsersAsync_ReturnsPagedResultsWithRolesPopulated()
+    {
+        var userA = new TestUser { Id = "1", Email = "a@example.com" };
+        var userB = new TestUser { Id = "2", Email = "b@example.com" };
+        _userManager.Setup(x => x.Users).Returns(new[] { userA, userB }.AsQueryable());
+        _userManager.Setup(x => x.GetRolesAsync(userA)).ReturnsAsync(new List<string> { "Admin" });
+        _userManager.Setup(x => x.GetRolesAsync(userB)).ReturnsAsync(new List<string>());
+        var service = CreateService();
+
+        var result = await service.ListUsersAsync(page: 1, pageSize: 20);
+
+        Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
+        Assert.Equal(2, result.Value!.TotalCount);
+        Assert.Equal(2, result.Value.Items.Count);
+        Assert.Equal(new[] { "Admin" }, userA.Roles);
+        Assert.Empty(userB.Roles);
+    }
+
+    [Fact]
+    public async Task ListUsersAsync_RespectsPageSize()
+    {
+        var users = Enumerable.Range(1, 5)
+            .Select(i => new TestUser { Id = i.ToString(), Email = $"user{i}@example.com" })
+            .ToArray();
+        _userManager.Setup(x => x.Users).Returns(users.AsQueryable());
+        _userManager.Setup(x => x.GetRolesAsync(It.IsAny<TestUser>())).ReturnsAsync(new List<string>());
+        var service = CreateService();
+
+        var result = await service.ListUsersAsync(page: 2, pageSize: 2);
+
+        Assert.Equal(5, result.Value!.TotalCount);
+        Assert.Equal(2, result.Value.Items.Count);
+        Assert.Equal(2, result.Value.Page);
+        Assert.Equal(2, result.Value.PageSize);
+    }
+
+    [Fact]
+    public async Task AdminCreateUserAsync_OnSuccess_SetsHasSetPasswordFalseAssignsRolesAndSendsEmail()
+    {
+        _userManager.Setup(x => x.CreateAsync(It.IsAny<TestUser>(), It.IsAny<string>())).ReturnsAsync(IdentityResult.Success);
+        _userManager.Setup(x => x.AddToRoleAsync(It.IsAny<TestUser>(), "Support")).ReturnsAsync(IdentityResult.Success);
+        _userManager.Setup(x => x.GenerateEmailConfirmationTokenAsync(It.IsAny<TestUser>())).ReturnsAsync("email-code");
+        _userManager.Setup(x => x.GeneratePasswordResetTokenAsync(It.IsAny<TestUser>())).ReturnsAsync("reset-code");
+        _userManager.Setup(x => x.GetRolesAsync(It.IsAny<TestUser>())).ReturnsAsync(new List<string> { "Support" });
+        var service = CreateService();
+
+        var result = await service.AdminCreateUserAsync(new AdminCreateUserRequestDto
+        {
+            Email = Email,
+            Roles = new[] { "Support" }
+        });
+
+        Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
+        Assert.NotNull(result.Value);
+        _userManager.Verify(x => x.AddToRoleAsync(It.IsAny<TestUser>(), "Support"), Times.Once);
+        _emailSender.Verify(x => x.SendEmailAsync(Email, It.IsAny<string>(),
+            It.Is<string>(body => body.Contains("isFirstLogin=true"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task AdminCreateUserAsync_WithFailingCreate_ReturnsBadRequestAndSendsNoEmail()
+    {
+        var errors = new[] { new IdentityError { Code = "DuplicateEmail", Description = "Email taken." } };
+        _userManager.Setup(x => x.CreateAsync(It.IsAny<TestUser>(), It.IsAny<string>())).ReturnsAsync(IdentityResult.Failed(errors));
+        var service = CreateService();
+
+        var result = await service.AdminCreateUserAsync(new AdminCreateUserRequestDto { Email = Email });
+
+        Assert.Equal(Jwt2FaResultKind.BadRequest, result.Kind);
+        _emailSender.Verify(x => x.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
     private static string Base64UrlEncode(string value) =>
         Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(value)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 

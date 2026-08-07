@@ -45,4 +45,19 @@ public interface IAuthCoreService<TUser>
     /// hold the configured admin role.
     /// </summary>
     Task<Jwt2FaResult<object>> GetUserByEmailAsync(string email, ClaimsPrincipal caller);
+
+    /// <summary>Looks up a user by id. Admin-only — enforced by the endpoint's authorization policy, not this method.</summary>
+    Task<Jwt2FaResult<object>> GetUserByIdAsync(string id);
+
+    /// <summary>Lists users, paginated. Admin-only — enforced by the endpoint's authorization policy, not this method.</summary>
+    Task<Jwt2FaResult<PagedResultDto<object>>> ListUsersAsync(int page, int pageSize);
+
+    /// <summary>
+    /// Creates a user with a generated password and emails the same bundled
+    /// confirmation+first-login-password-reset link <see cref="SendEmailConfirmationAsync"/>
+    /// sends for not-yet-set-password accounts — one atomic call instead of the caller
+    /// needing to chain create-then-send-confirmation themselves. Admin-only — enforced
+    /// by the endpoint's authorization policy, not this method.
+    /// </summary>
+    Task<Jwt2FaResult<object>> AdminCreateUserAsync(AdminCreateUserRequestDto request);
 }

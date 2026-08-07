@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
 
@@ -273,6 +274,112 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
         }
 
         return Jwt2FaResult<object>.Ok(_userProjector(user));
+    }
+
+    /// <inheritdoc />
+    public async Task<Jwt2FaResult<object>> GetUserByIdAsync(string id)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user is null)
+        {
+            return Jwt2FaResult<object>.NotFound($"No user found with id '{id}'.");
+        }
+
+        await PopulateRolesIfAwareAsync(user);
+
+        return Jwt2FaResult<object>.Ok(_userProjector(user));
+    }
+
+    /// <inheritdoc />
+    public async Task<Jwt2FaResult<PagedResultDto<object>>> ListUsersAsync(int page, int pageSize)
+    {
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize < 1 ? 20 : pageSize;
+
+        // UserManager.Users is a plain IQueryable<TUser> with no async guarantee unless the
+        // consumer's store happens to be EF Core — this package doesn't take an EF Core
+        // dependency itself, so pagination here is synchronous LINQ, not .ToListAsync().
+        var query = _userManager.Users.OrderBy(u => u.Email);
+        var totalCount = query.Count();
+        var users = query.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        foreach (var user in users)
+        {
+            await PopulateRolesIfAwareAsync(user);
+        }
+
+        return Jwt2FaResult<PagedResultDto<object>>.Ok(new PagedResultDto<object>
+        {
+            Items = users.Select(u => _userProjector(u)).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        });
+    }
+
+    /// <inheritdoc />
+    public async Task<Jwt2FaResult<object>> AdminCreateUserAsync(AdminCreateUserRequestDto request)
+    {
+        var user = new TUser { UserName = request.Email, Email = request.Email };
+        var temporaryPassword = GenerateTemporaryPassword();
+        var result = await _userManager.CreateAsync(user, temporaryPassword);
+
+        if (!result.Succeeded)
+        {
+            return Jwt2FaResult<object>.BadRequest(result.Errors);
+        }
+
+        foreach (var role in request.Roles)
+        {
+            await _userManager.AddToRoleAsync(user, role);
+        }
+
+        if (user is IAdminProvisionableUser provisionable)
+        {
+            provisionable.HasSetPassword = false;
+            await _userManager.UpdateAsync(user);
+        }
+
+        var emailCode = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+        emailCode = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(emailCode));
+
+        var appName = _authCoreOptions.Value.ApplicationName;
+        var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
+            ("userId", user.Id), ("code", emailCode));
+
+        if (user is IAdminProvisionableUser { HasSetPassword: false })
+        {
+            var passwordResetCode = await _userManager.GeneratePasswordResetTokenAsync(user);
+            passwordResetCode = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(passwordResetCode));
+            callbackUrl += $"&passwordResetCode={Uri.EscapeDataString(passwordResetCode)}&isFirstLogin=true";
+        }
+
+        await _emailSender.SendEmailAsync(
+            request.Email,
+            $"{appName} Account Created",
+            $"An account has been created for you on {appName}.<br/><br/>" +
+            $"Please confirm your account and set your password by <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>clicking here</a>.<br/><br/>" +
+            $"If you were not expecting this, please ignore this email.");
+
+        await PopulateRolesIfAwareAsync(user);
+
+        return Jwt2FaResult<object>.Ok(_userProjector(user));
+    }
+
+    private async Task PopulateRolesIfAwareAsync(TUser user)
+    {
+        if (user is IRoleAwareUser roleAware)
+        {
+            roleAware.Roles = (await _userManager.GetRolesAsync(user)).ToList();
+        }
+    }
+
+    private static string GenerateTemporaryPassword()
+    {
+        // Discarded immediately in favor of the emailed first-login reset link — just
+        // needs to satisfy whatever password policy the consumer configured.
+        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*";
+        return RandomNumberGenerator.GetString(chars, 24);
     }
 
     private string BuildUrl(string pathTemplate, params (string Token, string Value)[] substitutions)

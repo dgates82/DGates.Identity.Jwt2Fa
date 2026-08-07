@@ -136,10 +136,37 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         var code = EmailParsingHelper.ExtractQueryParam(confirmationEmail.HtmlMessage, "code");
         await Client.PostAsJsonAsync("/auth/confirmEmail", new ConfirmEmailRequestDto { UserId = userId, Code = code });
 
+        return await LoginAsync(email, password);
+    }
+
+    /// <summary>Logs in an already-confirmed user, returning the issued JWT.</summary>
+    protected async Task<string> LoginAsync(string email, string password)
+    {
         var loginResponse = await Client.PostAsJsonAsync("/auth/login", new AuthRequestDto { Email = email, Password = password });
         var loginResult = await loginResponse.Content.ReadFromJsonAsync<AuthResponseDto>();
 
         return loginResult!.Token!;
+    }
+
+    /// <summary>
+    /// Adds a user to a role directly via <see cref="RoleManager{TRole}"/>/<see cref="UserManager{TUser}"/>,
+    /// bypassing HTTP — this package doesn't expose a role-management endpoint. Creates the
+    /// role first if it doesn't already exist. A user with an already-issued JWT needs to
+    /// log in again afterward to get a token carrying the new role claim.
+    /// </summary>
+    protected async Task AddToRoleAsync(string email, string role)
+    {
+        using var scope = _host.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<TestUser>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+
+        if (!await roleManager.RoleExistsAsync(role))
+        {
+            await roleManager.CreateAsync(new IdentityRole(role));
+        }
+
+        var user = await userManager.FindByEmailAsync(email);
+        await userManager.AddToRoleAsync(user!, role);
     }
 
     protected static HttpRequestMessage AuthorizedRequest(HttpMethod method, string url, string token)

@@ -1,6 +1,7 @@
 using DGates.Identity.Jwt2Fa.Jwt;
 using DGates.Identity.Jwt2Fa.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -57,6 +58,11 @@ public static class AuthCoreServiceCollectionExtensions
                 ValidAudience = jwtOptions.ValidAudience,
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SecurityKey))
             };
+        });
+
+        services.AddAuthorization(options =>
+        {
+            options.AddPolicy(Jwt2FaPolicies.AdminOnly, policy => policy.RequireRole(jwtOptions.AdminRoleName));
         });
 
         return services;
