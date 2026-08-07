@@ -53,18 +53,26 @@ interface, and it's a compile error, not a silent no-op.
 
 | Module | Registration | Requires on `TUser` | Endpoints |
 |---|---|---|---|
-| Core | `AddAuthCore<TUser>()` + `MapAuthCore<TUser>()` | nothing extra (optionally honors `IActivationPolicy<TUser>` if registered — see below) | register, login, secure, getuserbyemail, getuserbyid, listusers, admincreateuser, forgotpassword, resetpassword, changepassword, sendemailconfirmation, confirmEmail |
+| Core | `AddAuthCore<TUser>()` + `MapAuthCore<TUser>()` | nothing extra (optionally honors `IActivationPolicy<TUser>` if registered — see below) | register, login, secure, getuserbyemail, getuserbyid, listusers, admincreateuser, adminupdateuser, forgotpassword, resetpassword, changepassword, sendemailconfirmation, confirmEmail |
 | Two-factor | `Add2Fa<TUser>()` + `Map2Fa<TUser>()` | `IMultiFactorMethodUser` | login2fa, sendtwofacode, enableauthenticator, verifyauthenticator, resetauthenticator |
 
-`getuserbyid`, `listusers`, and `admincreateuser` require the `Jwt2FaPolicies.AdminOnly`
-authorization policy (`AddAuthCore` registers it, requiring the configured
-`AdminRoleName` role) rather than the self-or-admin check `getuserbyemail` uses — there's
-no "self" case for browsing all users or creating one. `admincreateuser` mirrors
-`register`: it creates the account *and* sends the confirmation/first-login email in one
-call, generating a temporary password that's discarded in favor of the emailed
-password-reset link — callers never see or need it. Note that role claims are baked into
-a JWT at login time, so promoting a user to the admin role doesn't retroactively grant
-access to a token they already hold — they need to log in again.
+`getuserbyid`, `listusers`, `admincreateuser`, and `adminupdateuser` require the
+`Jwt2FaPolicies.AdminOnly` authorization policy (`AddAuthCore` registers it, requiring the
+configured `AdminRoleName` role) rather than the self-or-admin check `getuserbyemail`
+uses — there's no "self" case for browsing all users, creating one, or editing another
+user's roles. `admincreateuser` mirrors `register`: it creates the account *and* sends the
+confirmation/first-login email in one call, generating a temporary password that's
+discarded in favor of the emailed password-reset link — callers never see or need it.
+`adminupdateuser` updates only the identity concerns this package knows about — email and
+role membership (a full-set diff against the user's current roles, not a delta) — never
+app-specific profile fields, which stay on the consuming app's own update endpoint to
+avoid mass-assignment risk. Changing the email re-sends a confirmation link to the new
+address, since Identity resets `EmailConfirmed` on any email change. `listusers`'
+`pageSize` is clamped to `AuthCoreOptions.MaxPageSize` (default 100) regardless of what's
+requested — there's no "give me everyone" escape hatch. Note that role claims are baked
+into a JWT at login time, so promoting a user to the admin role — or editing their roles
+via `adminupdateuser` — doesn't retroactively grant/revoke access on a token they already
+hold; they need to log in again.
 
 Three capabilities layer on top of core as pure enhancements — none are their own
 module, and core works fine with none registered:
@@ -73,7 +81,13 @@ module, and core works fine with none registered:
 make it reject inactive users too, register an `IActivationPolicy<TUser>` — the
 built-in `AddDefaultActivationPolicy<TUser>()` (requires `IActivatableUser`, a plain
 `bool IsActive`) or your own for anything more complex. `login` honors whichever
-policy is registered, or works the same with none at all.
+policy is registered, or works the same with none at all. `AddDefaultActivationPolicy<TUser>()`
+also registers `IUserActivationService<TUser>`; pair it with
+`MapDefaultActivationPolicy<TUser>()` to map `activate`/`deactivate` admin endpoints
+that toggle `IsActive` directly. Both are scoped to the single-flag case specifically —
+a consumer with a custom, non-boolean `IActivationPolicy<TUser>` doesn't get these
+endpoints (the package can't know how to "activate" arbitrary logic) and should add
+their own admin action instead.
 
 **`IAdminProvisionableUser` enhances two endpoints.** If `TUser` implements it,
 `resetpassword`/`sendemailconfirmation` handle the admin-created-account first-login
@@ -127,6 +141,7 @@ app.UseAuthorization();
 
 app.MapAuthCore<AppUser>();
 app.Map2Fa<AppUser>();
+app.MapDefaultActivationPolicy<AppUser>();
 
 app.Run();
 ```
@@ -160,7 +175,8 @@ same way.
     "ApplicationName": "Your App",
     "FrontendBaseUrl": "https://your-app.example.com",
     "EmailConfirmationPath": "/email-confirmation?userId={userId}&code={code}",
-    "ForgotPasswordPath": "/forgot-password/reset?code={code}"
+    "ForgotPasswordPath": "/forgot-password/reset?code={code}",
+    "MaxPageSize": 100
   }
 }
 ```
@@ -172,6 +188,8 @@ differently. `FrontendBaseUrl`
 (no trailing slash) is combined with the two path templates to build the links
 emailed to users — only the domain is configured once; the paths (and their
 `{userId}`/`{code}` tokens) can point at whatever routes your frontend actually uses.
+`MaxPageSize` (optional, defaults to 100) is the hard cap `listusers` clamps its
+`pageSize` query parameter to.
 
 ## License
 

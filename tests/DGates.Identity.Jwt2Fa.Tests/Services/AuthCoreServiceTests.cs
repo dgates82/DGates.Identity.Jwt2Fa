@@ -562,6 +562,127 @@ public class AuthCoreServiceTests
         _emailSender.Verify(x => x.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
+    [Fact]
+    public async Task ListUsersAsync_ClampsPageSizeToMaxPageSize()
+    {
+        var users = Enumerable.Range(1, 5)
+            .Select(i => new TestUser { Id = i.ToString(), Email = $"user{i}@example.com" })
+            .ToArray();
+        _userManager.Setup(x => x.Users).Returns(users.AsQueryable());
+        _userManager.Setup(x => x.GetRolesAsync(It.IsAny<TestUser>())).ReturnsAsync(new List<string>());
+        var options = Options.Create(new AuthCoreOptions
+        {
+            ApplicationName = "Test App",
+            FrontendBaseUrl = "https://app.example.com",
+            EmailConfirmationPath = "/email-confirmation?userId={userId}&code={code}",
+            ForgotPasswordPath = "/forgot-password/reset?code={code}",
+            MaxPageSize = 3
+        });
+        var service = new AuthCoreService<TestUser>(
+            _userManager.Object,
+            _signInManager.Object,
+            _jwtTokenService.Object,
+            user => new { user.Id },
+            _emailSender.Object,
+            options,
+            _jwtOptions);
+
+        var result = await service.ListUsersAsync(page: 1, pageSize: 1000);
+
+        Assert.Equal(3, result.Value!.PageSize);
+        Assert.Equal(3, result.Value.Items.Count);
+    }
+
+    [Fact]
+    public async Task AdminUpdateUserAsync_WithUnknownId_ReturnsNotFound()
+    {
+        _userManager.Setup(x => x.FindByIdAsync("missing")).ReturnsAsync((TestUser?)null);
+        var service = CreateService();
+
+        var result = await service.AdminUpdateUserAsync("missing", new AdminUpdateUserRequestDto { Email = Email });
+
+        Assert.Equal(Jwt2FaResultKind.NotFound, result.Kind);
+    }
+
+    [Fact]
+    public async Task AdminUpdateUserAsync_WithChangedEmail_UpdatesEmailAndUserNameAndSendsConfirmation()
+    {
+        var user = new TestUser { Id = "1", Email = Email, UserName = Email };
+        _userManager.Setup(x => x.FindByIdAsync("1")).ReturnsAsync(user);
+        _userManager.Setup(x => x.SetEmailAsync(user, "new@example.com")).ReturnsAsync(IdentityResult.Success);
+        _userManager.Setup(x => x.SetUserNameAsync(user, "new@example.com")).ReturnsAsync(IdentityResult.Success);
+        _userManager.Setup(x => x.GenerateEmailConfirmationTokenAsync(user)).ReturnsAsync("email-code");
+        _userManager.Setup(x => x.GetRolesAsync(user)).ReturnsAsync(new List<string>());
+        var service = CreateService();
+
+        var result = await service.AdminUpdateUserAsync("1", new AdminUpdateUserRequestDto { Email = "new@example.com" });
+
+        Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
+        _userManager.Verify(x => x.SetEmailAsync(user, "new@example.com"), Times.Once);
+        _userManager.Verify(x => x.SetUserNameAsync(user, "new@example.com"), Times.Once);
+        _emailSender.Verify(x => x.SendEmailAsync("new@example.com", It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AdminUpdateUserAsync_WithUnchangedEmail_DoesNotCallSetEmail()
+    {
+        var user = new TestUser { Id = "1", Email = Email, UserName = Email };
+        _userManager.Setup(x => x.FindByIdAsync("1")).ReturnsAsync(user);
+        _userManager.Setup(x => x.GetRolesAsync(user)).ReturnsAsync(new List<string>());
+        var service = CreateService();
+
+        var result = await service.AdminUpdateUserAsync("1", new AdminUpdateUserRequestDto { Email = Email });
+
+        Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
+        _userManager.Verify(x => x.SetEmailAsync(It.IsAny<TestUser>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AdminUpdateUserAsync_DiffsRoles_AddingAndRemovingOnlyWhatChanged()
+    {
+        var user = new TestUser { Id = "1", Email = Email, UserName = Email };
+        _userManager.Setup(x => x.FindByIdAsync("1")).ReturnsAsync(user);
+        _userManager.Setup(x => x.GetRolesAsync(user)).ReturnsAsync(new List<string> { "Support", "Legacy" });
+        _userManager
+            .Setup(x => x.AddToRolesAsync(user, It.Is<IEnumerable<string>>(r => r.Single() == "Admin")))
+            .ReturnsAsync(IdentityResult.Success);
+        _userManager
+            .Setup(x => x.RemoveFromRolesAsync(user, It.Is<IEnumerable<string>>(r => r.Single() == "Legacy")))
+            .ReturnsAsync(IdentityResult.Success);
+        var service = CreateService();
+
+        var result = await service.AdminUpdateUserAsync("1", new AdminUpdateUserRequestDto
+        {
+            Email = Email,
+            Roles = new[] { "Support", "Admin" }
+        });
+
+        Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
+        _userManager.Verify(x => x.AddToRolesAsync(user, It.Is<IEnumerable<string>>(r => r.Single() == "Admin")), Times.Once);
+        _userManager.Verify(x => x.RemoveFromRolesAsync(user, It.Is<IEnumerable<string>>(r => r.Single() == "Legacy")), Times.Once);
+    }
+
+    [Fact]
+    public async Task AdminUpdateUserAsync_WithFailingRoleAssignment_ReturnsBadRequest()
+    {
+        var user = new TestUser { Id = "1", Email = Email, UserName = Email };
+        var errors = new[] { new IdentityError { Code = "RoleNotFound", Description = "Role does not exist." } };
+        _userManager.Setup(x => x.FindByIdAsync("1")).ReturnsAsync(user);
+        _userManager.Setup(x => x.GetRolesAsync(user)).ReturnsAsync(new List<string>());
+        _userManager
+            .Setup(x => x.AddToRolesAsync(user, It.IsAny<IEnumerable<string>>()))
+            .ReturnsAsync(IdentityResult.Failed(errors));
+        var service = CreateService();
+
+        var result = await service.AdminUpdateUserAsync("1", new AdminUpdateUserRequestDto
+        {
+            Email = Email,
+            Roles = new[] { "Nonexistent" }
+        });
+
+        Assert.Equal(Jwt2FaResultKind.BadRequest, result.Kind);
+    }
+
     private static string Base64UrlEncode(string value) =>
         Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(value)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 

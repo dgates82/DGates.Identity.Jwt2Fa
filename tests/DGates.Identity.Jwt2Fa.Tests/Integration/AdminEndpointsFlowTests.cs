@@ -91,4 +91,88 @@ public class AdminEndpointsFlowTests : IntegrationTestBase
             AuthorizedRequest(HttpMethod.Get, $"/auth/getuserbyid/{otherUserId}", adminToken));
         getByIdResponse.EnsureSuccessStatusCode();
     }
+
+    [Fact]
+    public async Task ActivateAndDeactivate_ForNonAdminCaller_ReturnForbidden()
+    {
+        var token = await RegisterConfirmAndLoginAsync(OtherEmail, Password);
+
+        var deactivateResponse = await Client.SendAsync(AuthorizedRequest(HttpMethod.Post, "/auth/deactivate/whatever", token));
+        var activateResponse = await Client.SendAsync(AuthorizedRequest(HttpMethod.Post, "/auth/activate/whatever", token));
+
+        Assert.Equal(HttpStatusCode.Forbidden, deactivateResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, activateResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Deactivate_ThenAttemptLogin_IsRejectedByTheActivationPolicy()
+    {
+        await RegisterConfirmAndLoginAsync(OtherEmail, Password);
+        var otherUserId = EmailParsingHelper.ExtractQueryParam(
+            EmailSender.SentEmails.Single(e => e.Email == OtherEmail).HtmlMessage, "userId");
+
+        await RegisterConfirmAndLoginAsync(AdminEmail, Password);
+        await AddToRoleAsync(AdminEmail, "Admin");
+        var adminToken = await LoginAsync(AdminEmail, Password);
+
+        var deactivateResponse = await Client.SendAsync(
+            AuthorizedRequest(HttpMethod.Post, $"/auth/deactivate/{otherUserId}", adminToken));
+        deactivateResponse.EnsureSuccessStatusCode();
+
+        var loginResponse = await Client.PostAsJsonAsync("/auth/login", new AuthRequestDto { Email = OtherEmail, Password = Password });
+        var loginResult = await loginResponse.Content.ReadFromJsonAsync<AuthResponseDto>();
+        Assert.False(loginResult!.IsAuthSuccessful);
+
+        var reactivateResponse = await Client.SendAsync(
+            AuthorizedRequest(HttpMethod.Post, $"/auth/activate/{otherUserId}", adminToken));
+        reactivateResponse.EnsureSuccessStatusCode();
+
+        var secondLoginResponse = await Client.PostAsJsonAsync("/auth/login", new AuthRequestDto { Email = OtherEmail, Password = Password });
+        var secondLoginResult = await secondLoginResponse.Content.ReadFromJsonAsync<AuthResponseDto>();
+        Assert.True(secondLoginResult!.IsAuthSuccessful);
+    }
+
+    [Fact]
+    public async Task AdminUpdateUser_ForNonAdminCaller_ReturnsForbidden()
+    {
+        var token = await RegisterConfirmAndLoginAsync(OtherEmail, Password);
+
+        var updateResponse = await Client.SendAsync(WithJsonBody(
+            AuthorizedRequest(HttpMethod.Put, "/auth/adminupdateuser/whatever", token),
+            new AdminUpdateUserRequestDto { Email = "irrelevant@example.com" }));
+
+        Assert.Equal(HttpStatusCode.Forbidden, updateResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminUpdateUser_AsAdmin_UpdatesEmailAndDiffsRoles()
+    {
+        await RegisterConfirmAndLoginAsync(OtherEmail, Password);
+        var otherUserId = EmailParsingHelper.ExtractQueryParam(
+            EmailSender.SentEmails.Single(e => e.Email == OtherEmail).HtmlMessage, "userId");
+        await AddToRoleAsync(OtherEmail, "Legacy");
+        await EnsureRoleExistsAsync("Support");
+
+        await RegisterConfirmAndLoginAsync(AdminEmail, Password);
+        await AddToRoleAsync(AdminEmail, "Admin");
+        var adminToken = await LoginAsync(AdminEmail, Password);
+
+        const string newEmail = "renamed@example.com";
+        var updateResponse = await Client.SendAsync(WithJsonBody(
+            AuthorizedRequest(HttpMethod.Put, $"/auth/adminupdateuser/{otherUserId}", adminToken),
+            new AdminUpdateUserRequestDto { Email = newEmail, Roles = new[] { "Support" } }));
+        updateResponse.EnsureSuccessStatusCode();
+
+        // Changing email resets EmailConfirmed, so the endpoint re-sends a confirmation
+        // link to the new address — login can't succeed under RequireConfirmedAccount
+        // until it's used.
+        var confirmationEmail = EmailSender.SentEmails.Last(e => e.Email == newEmail);
+        var confirmUserId = EmailParsingHelper.ExtractQueryParam(confirmationEmail.HtmlMessage, "userId");
+        var confirmCode = EmailParsingHelper.ExtractQueryParam(confirmationEmail.HtmlMessage, "code");
+        await Client.PostAsJsonAsync("/auth/confirmEmail", new ConfirmEmailRequestDto { UserId = confirmUserId, Code = confirmCode });
+
+        var loginResponse = await Client.PostAsJsonAsync("/auth/login", new AuthRequestDto { Email = newEmail, Password = Password });
+        var loginResult = await loginResponse.Content.ReadFromJsonAsync<AuthResponseDto>();
+        Assert.True(loginResult!.IsAuthSuccessful);
+    }
 }

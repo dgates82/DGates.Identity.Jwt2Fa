@@ -60,4 +60,14 @@ public interface IAuthCoreService<TUser>
     /// by the endpoint's authorization policy, not this method.
     /// </summary>
     Task<Jwt2FaResult<object>> AdminCreateUserAsync(AdminCreateUserRequestDto request);
+
+    /// <summary>
+    /// Updates a user's email and role membership (added/removed via a full-set diff
+    /// against their current roles). Deliberately doesn't touch anything beyond those two
+    /// identity concerns — app-specific profile fields are the consuming app's own update
+    /// endpoint's job. Changing the email re-sends a confirmation email, since Identity
+    /// resets <c>EmailConfirmed</c> on any email change. Admin-only — enforced by the
+    /// endpoint's authorization policy, not this method.
+    /// </summary>
+    Task<Jwt2FaResult<object>> AdminUpdateUserAsync(string id, AdminUpdateUserRequestDto request);
 }
