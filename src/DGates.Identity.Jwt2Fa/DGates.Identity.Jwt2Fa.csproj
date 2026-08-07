@@ -6,13 +6,11 @@
         <Nullable>enable</Nullable>
         <IsPackable>true</IsPackable>
 
-        <!-- NuGet package metadata — all values below are placeholders.
-             TODO(template): update PackageId, Authors, Description, and RepositoryUrl for your project. -->
         <PackageId>DGates.Identity.Jwt2Fa</PackageId>
-        <Authors>Your Name</Authors>
-        <Description>Example library demonstrating this template's CI/CD and release pipeline.</Description>
+        <Authors>David Gates</Authors>
+        <Description>Real, claims-bearing JWTs and multi-channel two-factor authentication (Authenticator/TOTP, Email, SMS) for ASP.NET Core Identity - generic over your own user type.</Description>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
-        <RepositoryUrl>https://github.com/your-username/your-repo</RepositoryUrl>
+        <RepositoryUrl>https://github.com/dgates82/DGates.Identity.Jwt2Fa</RepositoryUrl>
         <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
     <ItemGroup>
