@@ -70,4 +70,15 @@ public interface IAuthCoreService<TUser>
     /// endpoint's authorization policy, not this method.
     /// </summary>
     Task<Jwt2FaResult<object>> AdminUpdateUserAsync(string id, AdminUpdateUserRequestDto request);
+
+    /// <summary>
+    /// Clears a user's lockout by setting <c>LockoutEnd</c> to now, so
+    /// <c>UserManager.IsLockedOutAsync</c> no longer reports them locked. Doesn't reset
+    /// <c>AccessFailedCount</c> — matches Identity's own lockout semantics, where that
+    /// resets on the next successful sign-in, not on an explicit unlock. Requires nothing
+    /// beyond <see cref="IdentityUser"/>; lockout is a base Identity concept, not a
+    /// capability interface. Admin-only — enforced by the endpoint's authorization
+    /// policy, not this method.
+    /// </summary>
+    Task<Jwt2FaResult<ResponseDto>> AdminUnlockUserAsync(string id);
 }

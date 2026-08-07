@@ -683,6 +683,51 @@ public class AuthCoreServiceTests
         Assert.Equal(Jwt2FaResultKind.BadRequest, result.Kind);
     }
 
+    [Fact]
+    public async Task AdminUnlockUserAsync_WithUnknownId_ReturnsNotFound()
+    {
+        _userManager.Setup(x => x.FindByIdAsync("missing")).ReturnsAsync((TestUser?)null);
+        var service = CreateService();
+
+        var result = await service.AdminUnlockUserAsync("missing");
+
+        Assert.Equal(Jwt2FaResultKind.NotFound, result.Kind);
+    }
+
+    [Fact]
+    public async Task AdminUnlockUserAsync_SetsLockoutEndToNow()
+    {
+        var user = new TestUser { Id = "1", Email = Email };
+        _userManager.Setup(x => x.FindByIdAsync("1")).ReturnsAsync(user);
+        _userManager
+            .Setup(x => x.SetLockoutEndDateAsync(user, It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(IdentityResult.Success);
+        var service = CreateService();
+
+        var result = await service.AdminUnlockUserAsync("1");
+
+        Assert.True(result.Value!.IsSuccess);
+        _userManager.Verify(
+            x => x.SetLockoutEndDateAsync(user, It.Is<DateTimeOffset?>(d => d.HasValue && d.Value <= DateTimeOffset.UtcNow)),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task AdminUnlockUserAsync_WhenStoreUpdateFails_ReturnsUnsuccessfulResponseWithMessage()
+    {
+        var user = new TestUser { Id = "1", Email = Email };
+        _userManager.Setup(x => x.FindByIdAsync("1")).ReturnsAsync(user);
+        _userManager
+            .Setup(x => x.SetLockoutEndDateAsync(user, It.IsAny<DateTimeOffset?>()))
+            .ReturnsAsync(IdentityResult.Failed(new IdentityError { Description = "Store does not support lockout." }));
+        var service = CreateService();
+
+        var result = await service.AdminUnlockUserAsync("1");
+
+        Assert.False(result.Value!.IsSuccess);
+        Assert.Contains("Store does not support lockout.", result.Value.Message);
+    }
+
     private static string Base64UrlEncode(string value) =>
         Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(value)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 

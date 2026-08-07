@@ -175,4 +175,34 @@ public class AdminEndpointsFlowTests : IntegrationTestBase
         var loginResult = await loginResponse.Content.ReadFromJsonAsync<AuthResponseDto>();
         Assert.True(loginResult!.IsAuthSuccessful);
     }
+
+    [Fact]
+    public async Task Unlock_ForNonAdminCaller_ReturnsForbidden()
+    {
+        var token = await RegisterConfirmAndLoginAsync(OtherEmail, Password);
+
+        var unlockResponse = await Client.SendAsync(AuthorizedRequest(HttpMethod.Post, "/auth/unlock/whatever", token));
+
+        Assert.Equal(HttpStatusCode.Forbidden, unlockResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Unlock_AsAdmin_ClearsAnExistingLockout()
+    {
+        await RegisterConfirmAndLoginAsync(OtherEmail, Password);
+        var otherUserId = EmailParsingHelper.ExtractQueryParam(
+            EmailSender.SentEmails.Single(e => e.Email == OtherEmail).HtmlMessage, "userId");
+        await LockOutUserAsync(OtherEmail);
+        Assert.True(await IsLockedOutAsync(OtherEmail));
+
+        await RegisterConfirmAndLoginAsync(AdminEmail, Password);
+        await AddToRoleAsync(AdminEmail, "Admin");
+        var adminToken = await LoginAsync(AdminEmail, Password);
+
+        var unlockResponse = await Client.SendAsync(
+            AuthorizedRequest(HttpMethod.Post, $"/auth/unlock/{otherUserId}", adminToken));
+        unlockResponse.EnsureSuccessStatusCode();
+
+        Assert.False(await IsLockedOutAsync(OtherEmail));
+    }
 }

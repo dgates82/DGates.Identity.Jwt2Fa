@@ -53,10 +53,10 @@ interface, and it's a compile error, not a silent no-op.
 
 | Module | Registration | Requires on `TUser` | Endpoints |
 |---|---|---|---|
-| Core | `AddAuthCore<TUser>()` + `MapAuthCore<TUser>()` | nothing extra (optionally honors `IActivationPolicy<TUser>` if registered — see below) | register, login, secure, getuserbyemail, getuserbyid, listusers, admincreateuser, adminupdateuser, forgotpassword, resetpassword, changepassword, sendemailconfirmation, confirmEmail |
+| Core | `AddAuthCore<TUser>()` + `MapAuthCore<TUser>()` | nothing extra (optionally honors `IActivationPolicy<TUser>` if registered — see below) | register, login, secure, getuserbyemail, getuserbyid, listusers, admincreateuser, adminupdateuser, unlock, forgotpassword, resetpassword, changepassword, sendemailconfirmation, confirmEmail |
 | Two-factor | `Add2Fa<TUser>()` + `Map2Fa<TUser>()` | `IMultiFactorMethodUser` | login2fa, sendtwofacode, enableauthenticator, verifyauthenticator, resetauthenticator |
 
-`getuserbyid`, `listusers`, `admincreateuser`, and `adminupdateuser` require the
+`getuserbyid`, `listusers`, `admincreateuser`, `adminupdateuser`, and `unlock` require the
 `Jwt2FaPolicies.AdminOnly` authorization policy (`AddAuthCore` registers it, requiring the
 configured `AdminRoleName` role) rather than the self-or-admin check `getuserbyemail`
 uses — there's no "self" case for browsing all users, creating one, or editing another
@@ -67,12 +67,15 @@ discarded in favor of the emailed password-reset link — callers never see or n
 role membership (a full-set diff against the user's current roles, not a delta) — never
 app-specific profile fields, which stay on the consuming app's own update endpoint to
 avoid mass-assignment risk. Changing the email re-sends a confirmation link to the new
-address, since Identity resets `EmailConfirmed` on any email change. `listusers`'
-`pageSize` is clamped to `AuthCoreOptions.MaxPageSize` (default 100) regardless of what's
-requested — there's no "give me everyone" escape hatch. Note that role claims are baked
-into a JWT at login time, so promoting a user to the admin role — or editing their roles
-via `adminupdateuser` — doesn't retroactively grant/revoke access on a token they already
-hold; they need to log in again.
+address, since Identity resets `EmailConfirmed` on any email change. `unlock` clears a
+locked-out user's lockout (`LockoutEnd` set to now) without resetting their failed-attempt
+count — requires nothing beyond `IdentityUser`, since lockout is a base Identity concept,
+not a capability interface. `listusers`' `pageSize` is clamped to
+`AuthCoreOptions.MaxPageSize` (default 100) regardless of what's requested — there's no
+"give me everyone" escape hatch. Note that role claims are baked into a JWT at login time,
+so promoting a user to the admin role — or editing their roles via `adminupdateuser` —
+doesn't retroactively grant/revoke access on a token they already hold; they need to log
+in again.
 
 Three capabilities layer on top of core as pure enhancements — none are their own
 module, and core works fine with none registered:
