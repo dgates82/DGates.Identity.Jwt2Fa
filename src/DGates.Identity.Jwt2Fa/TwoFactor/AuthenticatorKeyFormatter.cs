@@ -7,7 +7,10 @@ namespace DGates.Identity.Jwt2Fa.TwoFactor;
 /// <summary>Formats a raw TOTP authenticator key for display and QR-code enrollment.</summary>
 public static class AuthenticatorKeyFormatter
 {
+    // otpauth:// is the fixed scheme the authenticator-app QR standard requires, not a configurable path.
+#pragma warning disable S1075
     private const string AuthenticatorUriFormat = "otpauth://totp/{0}:{1}?secret={2}&issuer={0}&digits=6";
+#pragma warning restore S1075
 
     /// <summary>Splits an authenticator key into space-separated 4-character groups, lowercased for readability.</summary>
     public static string FormatKey(string unformattedKey)

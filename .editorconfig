@@ -1,0 +1,8 @@
+root = true
+
+[*.cs]
+# S2326: TUser is deliberately absent from IAuthCoreService/ITwoFactorService/IUserActivationService
+# method signatures — it exists to give each closed generic its own DI identity per consumer user
+# type, not to appear in a return/parameter type. Downgraded, not silenced, since it's a real
+# pattern worth a second look elsewhere if it recurs without the same justification.
+dotnet_diagnostic.S2326.severity = suggestion

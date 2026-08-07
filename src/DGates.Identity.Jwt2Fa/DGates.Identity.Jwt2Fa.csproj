@@ -27,4 +27,11 @@
       <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="10.0.10" />
       <PackageReference Include="DGates.Identity.NotificationProviders" Version="1.0.0" />
     </ItemGroup>
+    <ItemGroup>
+      <!-- Roslyn analyzer only — must never flow to consumers of the published package. -->
+      <PackageReference Include="SonarAnalyzer.CSharp" Version="10.31.0.145097">
+        <PrivateAssets>all</PrivateAssets>
+        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      </PackageReference>
+    </ItemGroup>
 </Project>
