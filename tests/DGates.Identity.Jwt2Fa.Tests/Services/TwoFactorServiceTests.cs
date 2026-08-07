@@ -131,6 +131,26 @@ public class TwoFactorServiceTests
         Assert.NotNull(result.Value.User);
     }
 
+    [Fact]
+    public async Task LoginTwoFactorAsync_WithValidCode_PopulatesRolesBeforeProjecting()
+    {
+        var user = new TestUser { Id = "1", Email = Email };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.VerifyTwoFactorTokenAsync(user, "Email", "123456")).ReturnsAsync(true);
+        _userManager.Setup(x => x.GetRolesAsync(user)).ReturnsAsync(new List<string> { "Admin" });
+        SetUpJwtTokenServiceToReturn("signed.jwt.token");
+        var service = CreateService();
+
+        await service.LoginTwoFactorAsync(new TwoFaAuthRequestDto
+        {
+            Email = Email,
+            TwoFactorProvider = "Email",
+            TwoFactorCode = "123456"
+        });
+
+        Assert.Equal(new[] { "Admin" }, user.Roles);
+    }
+
     private void SetUpJwtTokenServiceToReturn(string token)
     {
         var credentials = new SigningCredentials(

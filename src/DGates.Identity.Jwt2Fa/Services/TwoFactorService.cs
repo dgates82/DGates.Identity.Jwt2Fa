@@ -70,6 +70,7 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
         }
 
         var token = await IssueTokenAsync(user);
+        await PopulateRolesIfAwareAsync(user);
         return Jwt2FaResult<AuthResponseDto>.Ok(new AuthResponseDto
         {
             IsAuthSuccessful = true,
@@ -258,6 +259,14 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
             && await _userManager.IsInRoleAsync(currentUser, _jwtOptions.Value.AdminRoleName);
 
         return !isSelf && !isAdmin ? Jwt2FaResult<T>.BadRequest(forbiddenMessage) : null;
+    }
+
+    private async Task PopulateRolesIfAwareAsync(TUser user)
+    {
+        if (user is IRoleAwareUser roleAware)
+        {
+            roleAware.Roles = (await _userManager.GetRolesAsync(user)).ToList();
+        }
     }
 
     private async Task<string> IssueTokenAsync(TUser user)

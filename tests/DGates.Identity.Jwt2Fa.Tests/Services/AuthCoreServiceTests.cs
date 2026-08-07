@@ -148,6 +148,21 @@ public class AuthCoreServiceTests
     }
 
     [Fact]
+    public async Task LoginAsync_WithSuccessfulSignIn_PopulatesRolesBeforeProjecting()
+    {
+        var user = new TestUser { Id = "1", Email = Email, TwoFactorEnabled = false };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.GetRolesAsync(user)).ReturnsAsync(new List<string> { "Admin" });
+        _signInManager.Setup(x => x.PasswordSignInAsync(Email, Password, false, false)).ReturnsAsync(SignInResult.Success);
+        SetUpJwtTokenServiceToReturn("signed.jwt.token");
+        var service = CreateService();
+
+        await service.LoginAsync(new AuthRequestDto { Email = Email, Password = Password });
+
+        Assert.Equal(new[] { "Admin" }, user.Roles);
+    }
+
+    [Fact]
     public async Task LoginAsync_WhenTwoFactorRequired_ReturnsPhoneNumberOnlyForPhoneMethod()
     {
         var user = new TestUser { Id = "1", Email = Email, TwoFactorMethod = "Phone", PhoneNumber = "+15550000" };
@@ -424,12 +439,28 @@ public class AuthCoreServiceTests
         _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(target);
         _userManager.Setup(x => x.FindByIdAsync("user-1")).ReturnsAsync(target);
         _userManager.Setup(x => x.IsInRoleAsync(target, "Admin")).ReturnsAsync(false);
+        _userManager.Setup(x => x.GetRolesAsync(target)).ReturnsAsync(new List<string>());
         var service = CreateService();
 
         var result = await service.GetUserByEmailAsync(Email, ClaimsPrincipalHelper.ForUserId("user-1"));
 
         Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
         Assert.NotNull(result.Value);
+    }
+
+    [Fact]
+    public async Task GetUserByEmailAsync_WhenCallerIsSelf_PopulatesRolesBeforeProjecting()
+    {
+        var target = new TestUser { Id = "user-1", Email = Email };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(target);
+        _userManager.Setup(x => x.FindByIdAsync("user-1")).ReturnsAsync(target);
+        _userManager.Setup(x => x.IsInRoleAsync(target, "Admin")).ReturnsAsync(false);
+        _userManager.Setup(x => x.GetRolesAsync(target)).ReturnsAsync(new List<string> { "Admin" });
+        var service = CreateService();
+
+        await service.GetUserByEmailAsync(Email, ClaimsPrincipalHelper.ForUserId("user-1"));
+
+        Assert.Equal(new[] { "Admin" }, target.Roles);
     }
 
     [Fact]
@@ -440,6 +471,7 @@ public class AuthCoreServiceTests
         _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(target);
         _userManager.Setup(x => x.FindByIdAsync("admin-1")).ReturnsAsync(admin);
         _userManager.Setup(x => x.IsInRoleAsync(admin, "Admin")).ReturnsAsync(true);
+        _userManager.Setup(x => x.GetRolesAsync(target)).ReturnsAsync(new List<string>());
         var service = CreateService();
 
         var result = await service.GetUserByEmailAsync(Email, ClaimsPrincipalHelper.ForUserId("admin-1"));
