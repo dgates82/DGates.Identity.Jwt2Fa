@@ -1,67 +1,74 @@
 # Contributing
 
-Thanks for your interest in improving this template. A few guidelines to keep things
-consistent.
+Thanks for your interest in improving this package. A few guidelines to keep things consistent.
 
 ## Before you start
 
-- For anything beyond a small fix, open an issue first to discuss the change — especially
-  changes to `release.yml` or `ci.yml`, since those are the actual artifact this repo exists
-  to provide.
-- This is a template repo, not a growing product. Keep additions minimal and generic — if a
-  change only makes sense for a specific tech stack or use case, it probably belongs in your
-  own generated repo, not here.
+- For anything beyond a small fix, open an issue first to discuss the change.
+- The design (opt-in modules, capability interfaces instead of one big user
+  contract) is deliberate — see the README's ["Design"](README.md#design-opt-in-modules-capability-interfaces-instead-of-one-big-user-contract)
+  section and [angular-dotnet-auth-template#8](https://github.com/dgates82/angular-dotnet-auth-template/issues/8)
+  before proposing a new capability interface. Resist folding things back into one
+  big `IAppUser` — that's the shape this design specifically avoids.
 
 ## Development setup
 
 - `dotnet restore`
-- `docker compose up -d --wait` — starts LocalStack, seeds the example bucket/note
-  automatically
-- `dotnet test` — runs everything; use `--filter "Category!=Integration"` for unit tests only
-- See [LOCAL_DEV.md](docs/LOCAL_DEV.md) for the full local development walkthrough.
+- `dotnet test` — runs everything, no Docker or external services required. Unit
+  tests mock `UserManager`/`SignInManager` directly; integration tests run real HTTP
+  through `Microsoft.AspNetCore.TestHost` against a SQLite in-memory database (not
+  EF Core's `InMemory` provider — that doesn't enforce unique constraints or exercise
+  real generated SQL) with fake in-memory email/SMS senders.
 
 ## Making changes
 
 - Branch from `main`, open a PR — direct pushes to `main` are blocked.
-- Commit format: `type: lowercase description` (e.g. `feat:`, `fix:`, `docs:`, `style:`)
-- Keep `ExampleLibrary` / `ExampleLibrary.Tests` naming as-is — it's deliberately generic and
-  disposable so consumers understand it's meant to be replaced.
-- If you touch `S3NoteStore` or `ListNotesAsync`, keep the "lightweight summary via
-  `HeadObject`, never `GetObject` per item" pattern — this is a deliberate design choice, not
-  an oversight.
-- LocalStack/integration testing is required for this repo's own CI to pass. If your change
-  affects `docker-compose.yml` or `docker/seed.sh`, confirm `ci.yml` still passes end to end,
-  not just that it builds.
-- Update `CHANGELOG.md` under `[Unreleased]` for any user-facing change (workflow behavior,
-  template structure, README instructions). Use `### Added` for new capability, `### Changed`
-  for altering existing behavior.
+- Commit format: `type: lowercase description` (e.g. `feat:`, `fix:`, `docs:`, `chore:`).
+- A new module needs three things, not just an endpoint: the capability interface
+  (if it needs one), an `AddXyz<TUser>()`/`MapXyz<TUser>()` pair mirroring the
+  existing modules' shape, and the business logic living in `Services/` (an
+  interface + implementation), not inline in the endpoint mapping — endpoint methods
+  should stay thin wrappers that extract the request DTO and `HttpContext.User`,
+  call the service, and return `.ToIResult()`.
+- Services take `ClaimsPrincipal`, never `HttpContext`, for "who is the caller" —
+  keeps them usable directly (e.g. from a hand-rolled controller) without any
+  dependency on this package's own endpoint-mapping layer.
+- If a module's DI registration method and its endpoint-mapping method end up
+  needing different generic constraints (this happened with account activation —
+  `getuserbyemail` doesn't need `IActivationPolicy<TUser>` even though the module's
+  *optional* default-policy convenience does), split into two methods rather than
+  loosening the constraint via a runtime type check. A runtime check would silently
+  no-op instead of failing to compile, which breaks the "wrong shape → compile
+  error" guarantee every other module relies on.
+- Update `CHANGELOG.md` under `[Unreleased]` for any user-facing change.
 
 ## Pull requests
 
 - 1 approval required before merge (GitHub Ruleset on `main`).
-- CI must pass — build, unit tests, and LocalStack-backed integration tests.
+- CI must pass — build, unit tests, and integration tests.
 - Merge via merge commit, not squash — keeps full commit history intact.
 
-## Versioning this template
+## Releasing
 
-This repo is versioned independently from anything it helps publish. Tag template releases
-as `template-vX.Y.Z` (e.g. `template-v1.0.0`) — **not** `vX.Y.Z`, which is reserved for
-`release.yml`'s trigger and would attempt a real NuGet.org publish of `ExampleLibrary` if
-pushed here. Create a GitHub Release from the `template-v*` tag, referencing the matching
-`CHANGELOG.md` entry.
+This package uses real `vX.Y.Z` tags (e.g. `v1.0.0`), which `release.yml` watches
+for directly.
+
+1. Push the tag explicitly: `git tag vX.Y.Z <sha> && git push origin vX.Y.Z`.
+2. Let `release.yml` fire, publishing to NuGet.org via Trusted Publishing (OIDC) —
+   no API key is stored in the repo.
+3. Confirm the workflow run is green.
+4. Create the GitHub Release by selecting the tag that already exists — never type
+   a new tag name into the release form.
 
 ## What not to contribute
 
-- API keys, secrets, or anything that would require moving off Trusted Publishing (OIDC) —
-  this template is intentionally secret-free.
-- A hard requirement on `net48` (or Mono) for downstream consumers — this repo's own CI needs
-  Mono to test `ExampleLibrary`'s `net48` target, but that step must stay clearly documented
-  as removable for consumers who don't target `net48`.
-- A hard dependency on LocalStack/S3 specifically for downstream consumers — the template's
-  own example uses it, but the pattern must stay swappable, not mandatory, in how it's
-  documented.
+- API keys, secrets, or anything that would require moving off Trusted Publishing.
+- A hardcoded role name for the self-or-admin authorization checks — that's what
+  `Jwt2FaConfig:AdminRoleName` is for.
+- A hard dependency on a specific `IEmailSender`/`ISmsSender` implementation. This
+  package consumes those interfaces; it doesn't ship or assume any particular
+  provider.
 
 ## Questions
 
-Open an issue, or start a discussion if you're not sure whether something fits the template's
-scope.
+Open an issue if you're not sure whether something fits.

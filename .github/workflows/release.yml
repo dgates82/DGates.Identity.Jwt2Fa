@@ -18,19 +18,8 @@ jobs:
         run: dotnet restore
       - name: Build
         run: dotnet build --configuration Release --no-restore
-      - name: Unit tests
-        run: dotnet test --configuration Release --no-build --filter "Category!=Integration"
-      # TODO(template): LocalStack block is required for this template's own example (S3NoteStore).
-      # Optional once you replace ExampleLibrary with your own project — keep, adapt to a
-      # different service, or delete. Seeding (bucket + starting note) happens automatically
-      # via docker/seed.sh, mounted as a LocalStack init hook in docker-compose.yml.
-      - name: Start LocalStack
-        run: docker compose up -d --wait
-      - name: Integration tests
-        run: dotnet test --configuration Release --no-build --filter "Category=Integration"
-      - name: Stop LocalStack
-        if: always()
-        run: docker compose down -v
+      - name: Tests
+        run: dotnet test --configuration Release --no-build
   publish:
     needs: build-and-test
     runs-on: ubuntu-latest

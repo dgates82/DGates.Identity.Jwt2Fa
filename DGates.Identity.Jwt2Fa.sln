@@ -22,12 +22,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Workflows", "Workflows", "{
 		.github\workflows\release.yml = .github\workflows\release.yml
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docker", "Docker", "{59D890A4-9AFE-41EE-BDAE-54B0999BF582}"
-	ProjectSection(SolutionItems) = preProject
-		docker\seed.sh = docker\seed.sh
-		docker-compose.yml = docker-compose.yml
-	EndProjectSection
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -46,6 +40,5 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{4422CED1-2ED2-4A8A-8EF7-07AA07E3FE8F} = {98B7D4BE-9FC8-4822-8D3E-C871927FA050}
 		{3AEA5F49-2D1B-48B1-8CED-CD74DE3F52B5} = {98B7D4BE-9FC8-4822-8D3E-C871927FA050}
-		{59D890A4-9AFE-41EE-BDAE-54B0999BF582} = {98B7D4BE-9FC8-4822-8D3E-C871927FA050}
 	EndGlobalSection
 EndGlobal
