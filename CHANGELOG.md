@@ -8,35 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Ported `JwtHandler`/`AccountController` from `angular-dotnet-auth-template`, genericized
-  over `TUser : IdentityUser` per
-  [angular-dotnet-auth-template#8](https://github.com/dgates82/angular-dotnet-auth-template/issues/8)'s
-  design: four opt-in modules (`AddAuthCore`/`AddAccountActivation`/`AddAdminProvisioning`/`Add2Fa`,
-  each with a matching `MapXyz` for endpoint mapping) built around capability interfaces
-  (`IActivatableUser`, `IAdminProvisionableUser`, `IMultiFactorMethodUser`) instead of one
-  fixed user type
-- `Jwt2FaUserProjector<TUser>` delegate — consumer-supplied projection embedded in the JWT's
-  `"user"` claim and returned from auth responses, replacing the source app's hardcoded DTO
-- `Jwt2FaResult<T>` — shared result wrapper letting services signal an HTTP outcome
-  (Ok/BadRequest/NotFound/Unauthorized) without depending on ASP.NET Core's `IResult`
-- All business logic lives in `Services/` (one interface + implementation per module),
-  `ClaimsPrincipal`-based rather than `HttpContext`-based, so every service is directly usable
-  outside this package's own endpoint-mapping layer
-- 64 unit tests (mocked `UserManager`/`SignInManager`) and 8 integration tests (real HTTP via
-  `Microsoft.AspNetCore.TestHost`, SQLite in-memory — not EF Core's `InMemory` provider)
-  covering registration, login, both 2FA enrollment paths (TOTP authenticator and
-  email-delivered codes), and the forgot-password/reset flow end to end
+- Real, claims-bearing JWTs and multi-channel two-factor authentication
+  (Authenticator/TOTP, Email, SMS) for ASP.NET Core Identity, generic over your own
+  `TUser : IdentityUser`
+- Two opt-in modules: `AddAuthCore`/`MapAuthCore` (register, login, the password/email
+  lifecycle, account lookup, and admin user management) and `Add2Fa`/`Map2Fa` (2FA
+  enrollment and verification across TOTP, email, and SMS)
+- Four capability interfaces that opportunistically enhance core if your `TUser`
+  implements them, with no loss of functionality if it doesn't: `IActivatableUser`,
+  `IAdminProvisionableUser`, `IMultiFactorMethodUser`, `IRoleAwareUser`
+- Admin user-management endpoints (list/get/create/update users, activate/deactivate),
+  gated by a new `Jwt2FaPolicies.AdminOnly` policy built on JWT role claims — also usable
+  directly on your own app's endpoints via `[Authorize(Roles = "YourRole")]`
+- `Jwt2FaUserProjector<TUser>` — controls what's embedded in the JWT and returned from
+  auth responses, so nothing sensitive on `TUser` leaks by default
+- `Jwt2FaResult<T>` — lets the service layer signal an HTTP outcome without depending on
+  ASP.NET Core's `IResult`, so every service is usable outside this package's own
+  endpoint-mapping layer too
 
-### Changed
-- Renamed from the `dotnet-nuget-release-template` scaffold's `ExampleLibrary` to
-  `DGates.Identity.Jwt2Fa`
-- Single-targeted `net10.0` (dropped `net48` and the CI Mono step that supported it)
-- CI/release workflows use real `vX.Y.Z` tags, not the template's `template-vX.Y.Z` scheme
-
-### Removed
-- The template's example Notes/S3 sample code and its `AWSSDK.S3` dependency
-- The template's LocalStack/S3 CI step, `docker-compose.yml`, and `docker/seed.sh` — this
-  package's own tests need no external services or containers
+### Known limitations
+- 2FA code expiry isn't independently configurable yet — tracked as
+  [#1](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/1)
 
 <!--
 ## [X.Y.Z] - YYYY-MM-DD
