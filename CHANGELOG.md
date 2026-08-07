@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ASP.NET Core's `IResult`, so every service is usable outside this package's own
   endpoint-mapping layer too
 
+### Fixed
+- `login`, `login2fa`, and `getuserbyemail` now populate `IRoleAwareUser.Roles` before
+  projecting the response, matching `getuserbyid`/`listusers`/`admincreateuser` — role
+  claims in the issued JWT were always correct, but a consumer reading roles off the
+  embedded `user` object (rather than decoding the JWT) previously saw an empty list on
+  these three endpoints ([#7](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/7))
+
 ### Known limitations
 - 2FA code expiry isn't independently configurable yet — tracked as
   [#1](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/1)

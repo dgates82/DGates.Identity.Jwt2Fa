@@ -101,6 +101,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
         if (result.Succeeded)
         {
             var token = await IssueTokenAsync(user);
+            await PopulateRolesIfAwareAsync(user);
             return Jwt2FaResult<AuthResponseDto>.Ok(new AuthResponseDto
             {
                 IsAuthSuccessful = true,
@@ -272,6 +273,8 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
             return Jwt2FaResult<object>.BadRequest(
                 "You can only look up your own account. Looking up another account requires the admin role.");
         }
+
+        await PopulateRolesIfAwareAsync(user);
 
         return Jwt2FaResult<object>.Ok(_userProjector(user));
     }
