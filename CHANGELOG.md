@@ -32,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   claims in the issued JWT were always correct, but a consumer reading roles off the
   embedded `user` object (rather than decoding the JWT) previously saw an empty list on
   these three endpoints ([#7](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/7))
+- `EmailConfirmationPath` now supports an `{email}` token, substituted consistently on
+  `register`, `admincreateuser`, `sendemailconfirmation`, and `adminupdateuser`'s
+  re-confirmation-on-email-change — previously only the source app's own `register`
+  action included the email address in its confirmation link, and that behavior wasn't
+  carried over when the URL-building moved into this package, silently breaking any
+  frontend page that used the address for something (e.g. a follow-up "enable 2FA"
+  link) without an extra lookup
 
 ### Known limitations
 - 2FA code expiry isn't independently configurable yet — tracked as
