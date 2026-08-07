@@ -67,7 +67,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
 
         var appName = _authCoreOptions.Value.ApplicationName;
         var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
-            ("userId", user.Id), ("code", code));
+            ("userId", user.Id), ("code", code), ("email", request.Email));
 
         await _emailSender.SendEmailAsync(
             request.Email,
@@ -216,7 +216,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
 
         var appName = _authCoreOptions.Value.ApplicationName;
         var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
-            ("userId", user.Id), ("code", emailCode));
+            ("userId", user.Id), ("code", emailCode), ("email", request.Email));
 
         // Admin-created accounts haven't set their own password yet — bundle a
         // password reset code into the same link so first login can set one. Only
@@ -349,7 +349,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
 
         var appName = _authCoreOptions.Value.ApplicationName;
         var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
-            ("userId", user.Id), ("code", emailCode));
+            ("userId", user.Id), ("code", emailCode), ("email", request.Email));
 
         if (user is IAdminProvisionableUser { HasSetPassword: false })
         {
@@ -401,7 +401,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
 
             var appName = _authCoreOptions.Value.ApplicationName;
             var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
-                ("userId", user.Id), ("code", emailCode));
+                ("userId", user.Id), ("code", emailCode), ("email", request.Email));
 
             await _emailSender.SendEmailAsync(
                 request.Email,

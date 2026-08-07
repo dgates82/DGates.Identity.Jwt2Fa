@@ -177,7 +177,7 @@ same way.
   "Jwt2FaAuthCoreConfig": {
     "ApplicationName": "Your App",
     "FrontendBaseUrl": "https://your-app.example.com",
-    "EmailConfirmationPath": "/email-confirmation?userId={userId}&code={code}",
+    "EmailConfirmationPath": "/email-confirmation?userId={userId}&email={email}&code={code}",
     "ForgotPasswordPath": "/forgot-password/reset?code={code}",
     "MaxPageSize": 100
   }
@@ -190,7 +190,12 @@ admin-only endpoints require — defaults to `"Admin"`, override if your app nam
 differently. `FrontendBaseUrl`
 (no trailing slash) is combined with the two path templates to build the links
 emailed to users — only the domain is configured once; the paths (and their
-`{userId}`/`{code}` tokens) can point at whatever routes your frontend actually uses.
+`{userId}`/`{email}`/`{code}` tokens) can point at whatever routes your frontend
+actually uses. `{email}` is substituted the same way everywhere
+`EmailConfirmationPath` is used (register, admincreateuser, sendemailconfirmation,
+and adminupdateuser's re-confirmation-on-email-change) — include it if your
+confirmation page wants the address without a lookup, leave it out of the template
+if you don't need it.
 `MaxPageSize` (optional, defaults to 100) is the hard cap `listusers` clamps its
 `pageSize` query parameter to.
 

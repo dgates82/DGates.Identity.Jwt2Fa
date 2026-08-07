@@ -58,6 +58,7 @@ public class AdminEndpointsFlowTests : IntegrationTestBase
         Assert.Contains("isFirstLogin=true", welcomeEmail.HtmlMessage);
         var passwordResetCode = EmailParsingHelper.ExtractQueryParam(welcomeEmail.HtmlMessage, "passwordResetCode");
         var userIdInLink = EmailParsingHelper.ExtractQueryParam(welcomeEmail.HtmlMessage, "userId");
+        Assert.Equal(newUserEmail, EmailParsingHelper.ExtractQueryParam(welcomeEmail.HtmlMessage, "email"));
 
         // The new user can use the bundled reset code to set their own password without ever knowing the generated one.
         var resetResponse = await Client.PostAsJsonAsync("/auth/resetpassword", new ResetPasswordRequestDto
