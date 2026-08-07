@@ -26,7 +26,9 @@ public class AuthCoreServiceTests
     private readonly IOptions<AuthCoreOptions> _authCoreOptions = Options.Create(new AuthCoreOptions
     {
         ApplicationName = "Test App",
-        EmailConfirmationCallbackUrl = "https://app.example.com/email-confirmation?userId={userId}&code={code}"
+        FrontendBaseUrl = "https://app.example.com",
+        EmailConfirmationPath = "/email-confirmation?userId={userId}&code={code}",
+        ForgotPasswordPath = "/forgot-password/reset?code={code}"
     });
 
     public AuthCoreServiceTests()
@@ -187,82 +189,213 @@ public class AuthCoreServiceTests
     }
 
     [Fact]
-    public async Task LoginTwoFactorAsync_WithUnknownUser_ReturnsOk()
-    {
-        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync((TestUser?)null);
-        var service = CreateService();
-
-        var result = await service.LoginTwoFactorAsync(new TwoFaAuthRequestDto
-        {
-            Email = Email,
-            TwoFactorProvider = "Email",
-            TwoFactorCode = "123456"
-        });
-
-        Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
-        Assert.False(result.Value!.IsAuthSuccessful);
-    }
-
-    [Fact]
-    public async Task LoginTwoFactorAsync_WithUnknownProvider_ReturnsOkWithError()
+    public async Task ForgotPasswordAsync_WithUnconfirmedEmail_ReturnsOkWithoutRevealingState()
     {
         var user = new TestUser { Id = "1", Email = Email };
         _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.IsEmailConfirmedAsync(user)).ReturnsAsync(false);
         var service = CreateService();
 
-        var result = await service.LoginTwoFactorAsync(new TwoFaAuthRequestDto
-        {
-            Email = Email,
-            TwoFactorProvider = "NotARealProvider",
-            TwoFactorCode = "123456"
-        });
+        var result = await service.ForgotPasswordAsync(new ForgotPasswordDto { Email = Email });
 
-        Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
-        Assert.False(result.Value!.IsAuthSuccessful);
-        Assert.Equal("Invalid Authentication Code", result.Value.ErrorMessage);
+        Assert.False(result.Value!.IsSuccess);
+        _emailSender.Verify(x => x.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
-    public async Task LoginTwoFactorAsync_WithInvalidCode_ReturnsOkWithError()
+    public async Task ForgotPasswordAsync_WithConfirmedEmail_SendsResetEmail()
     {
         var user = new TestUser { Id = "1", Email = Email };
         _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
-        _userManager.Setup(x => x.VerifyTwoFactorTokenAsync(user, "Email", "000000")).ReturnsAsync(false);
+        _userManager.Setup(x => x.IsEmailConfirmedAsync(user)).ReturnsAsync(true);
+        _userManager.Setup(x => x.GeneratePasswordResetTokenAsync(user)).ReturnsAsync("raw-code");
         var service = CreateService();
 
-        var result = await service.LoginTwoFactorAsync(new TwoFaAuthRequestDto
-        {
-            Email = Email,
-            TwoFactorProvider = "Email",
-            TwoFactorCode = "000000"
-        });
+        var result = await service.ForgotPasswordAsync(new ForgotPasswordDto { Email = Email });
 
-        Assert.False(result.Value!.IsAuthSuccessful);
-        Assert.Equal("Invalid Authentication Code", result.Value.ErrorMessage);
+        Assert.True(result.Value!.IsSuccess);
+        _emailSender.Verify(x => x.SendEmailAsync(Email, It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
 
     [Fact]
-    public async Task LoginTwoFactorAsync_WithValidCode_ReturnsTokenAndProjectedUser()
+    public async Task ResetPasswordAsync_OnSuccess_SetsHasSetPasswordTrue()
+    {
+        var user = new TestUser { Id = "1", Email = Email, HasSetPassword = false };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager
+            .Setup(x => x.ResetPasswordAsync(user, It.IsAny<string>(), "NewP@ss1"))
+            .ReturnsAsync(IdentityResult.Success);
+        var service = CreateService();
+
+        var result = await service.ResetPasswordAsync(new ResetPasswordRequestDto
+        {
+            Email = Email,
+            Password = "NewP@ss1",
+            Code = Base64UrlEncode("code")
+        });
+
+        Assert.True(result.Value!.IsSuccess);
+        Assert.True(user.HasSetPassword);
+        _userManager.Verify(x => x.UpdateAsync(user), Times.Once);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_OnFailure_DoesNotSetHasSetPassword()
+    {
+        var user = new TestUser { Id = "1", Email = Email, HasSetPassword = false };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager
+            .Setup(x => x.ResetPasswordAsync(user, It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(IdentityResult.Failed(new IdentityError { Description = "Weak password." }));
+        var service = CreateService();
+
+        var result = await service.ResetPasswordAsync(new ResetPasswordRequestDto
+        {
+            Email = Email,
+            Password = "weak",
+            Code = Base64UrlEncode("code")
+        });
+
+        Assert.False(result.Value!.IsSuccess);
+        Assert.False(user.HasSetPassword);
+        _userManager.Verify(x => x.UpdateAsync(It.IsAny<TestUser>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_WithUserNotImplementingCapability_StillSucceeds()
+    {
+        var bareUserManager = IdentityMockFactory.CreateUserManagerMock<BareUser>();
+        var bareSignInManager = IdentityMockFactory.CreateSignInManagerMock(bareUserManager.Object);
+        var user = new BareUser { Id = "1", Email = Email };
+        bareUserManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        bareUserManager
+            .Setup(x => x.ResetPasswordAsync(user, It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(IdentityResult.Success);
+        var service = new AuthCoreService<BareUser>(
+            bareUserManager.Object,
+            bareSignInManager.Object,
+            Mock.Of<IJwtTokenService<BareUser>>(),
+            u => new { u.Id },
+            _emailSender.Object,
+            _authCoreOptions);
+
+        var result = await service.ResetPasswordAsync(new ResetPasswordRequestDto
+        {
+            Email = Email,
+            Password = "NewP@ss1",
+            Code = Base64UrlEncode("code")
+        });
+
+        Assert.True(result.Value!.IsSuccess);
+        bareUserManager.Verify(x => x.UpdateAsync(It.IsAny<BareUser>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_OnSuccess_RefreshesSignIn()
     {
         var user = new TestUser { Id = "1", Email = Email };
         _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
-        _userManager.Setup(x => x.VerifyTwoFactorTokenAsync(user, "Email", "123456")).ReturnsAsync(true);
-        _userManager.Setup(x => x.GetRolesAsync(user)).ReturnsAsync(new List<string>());
-        SetUpJwtTokenServiceToReturn("signed.jwt.token");
+        _userManager
+            .Setup(x => x.ChangePasswordAsync(user, "old", "new"))
+            .ReturnsAsync(IdentityResult.Success);
+        _signInManager.Setup(x => x.RefreshSignInAsync(user)).Returns(Task.CompletedTask);
         var service = CreateService();
 
-        var result = await service.LoginTwoFactorAsync(new TwoFaAuthRequestDto
+        var result = await service.ChangePasswordAsync(new ChangePasswordRequestDto
         {
             Email = Email,
-            TwoFactorProvider = "Email",
-            TwoFactorCode = "123456"
+            CurrentPassword = "old",
+            NewPassword = "new"
         });
 
-        Assert.True(result.Value!.IsAuthSuccessful);
-        Assert.Equal("signed.jwt.token", result.Value.Token);
-        Assert.True(result.Value.RequiresTwoFactor);
-        Assert.NotNull(result.Value.User);
+        Assert.True(result.Value!.IsSuccess);
+        _signInManager.Verify(x => x.RefreshSignInAsync(user), Times.Once);
     }
+
+    [Fact]
+    public async Task SendEmailConfirmationAsync_WhenHasNotSetPassword_AppendsFirstLoginParams()
+    {
+        var user = new TestUser { Id = "1", Email = Email, HasSetPassword = false };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.GenerateEmailConfirmationTokenAsync(user)).ReturnsAsync("email-code");
+        _userManager.Setup(x => x.GeneratePasswordResetTokenAsync(user)).ReturnsAsync("reset-code");
+        string? capturedBody = null;
+        _emailSender
+            .Setup(x => x.SendEmailAsync(Email, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<string, string, string>((_, _, body) => capturedBody = body)
+            .Returns(Task.CompletedTask);
+        var service = CreateService();
+
+        await service.SendEmailConfirmationAsync(new SendEmailConfirmationRequestDto { Email = Email });
+
+        Assert.Contains("isFirstLogin=true", capturedBody);
+        Assert.Contains("passwordResetCode=", capturedBody);
+    }
+
+    [Fact]
+    public async Task SendEmailConfirmationAsync_WhenHasSetPassword_OmitsFirstLoginParams()
+    {
+        var user = new TestUser { Id = "1", Email = Email, HasSetPassword = true };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.GenerateEmailConfirmationTokenAsync(user)).ReturnsAsync("email-code");
+        string? capturedBody = null;
+        _emailSender
+            .Setup(x => x.SendEmailAsync(Email, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<string, string, string>((_, _, body) => capturedBody = body)
+            .Returns(Task.CompletedTask);
+        var service = CreateService();
+
+        await service.SendEmailConfirmationAsync(new SendEmailConfirmationRequestDto { Email = Email });
+
+        Assert.DoesNotContain("isFirstLogin", capturedBody);
+        _userManager.Verify(x => x.GeneratePasswordResetTokenAsync(It.IsAny<TestUser>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SendEmailConfirmationAsync_WithUserNotImplementingCapability_OmitsFirstLoginParams()
+    {
+        var bareUserManager = IdentityMockFactory.CreateUserManagerMock<BareUser>();
+        var bareSignInManager = IdentityMockFactory.CreateSignInManagerMock(bareUserManager.Object);
+        var user = new BareUser { Id = "1", Email = Email };
+        bareUserManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        bareUserManager.Setup(x => x.GenerateEmailConfirmationTokenAsync(user)).ReturnsAsync("email-code");
+        string? capturedBody = null;
+        _emailSender
+            .Setup(x => x.SendEmailAsync(Email, It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<string, string, string>((_, _, body) => capturedBody = body)
+            .Returns(Task.CompletedTask);
+        var service = new AuthCoreService<BareUser>(
+            bareUserManager.Object,
+            bareSignInManager.Object,
+            Mock.Of<IJwtTokenService<BareUser>>(),
+            u => new { u.Id },
+            _emailSender.Object,
+            _authCoreOptions);
+
+        await service.SendEmailConfirmationAsync(new SendEmailConfirmationRequestDto { Email = Email });
+
+        Assert.DoesNotContain("isFirstLogin", capturedBody);
+    }
+
+    [Fact]
+    public async Task ConfirmEmailAsync_ReturnsIdentityResultOutcome()
+    {
+        var user = new TestUser { Id = "1", Email = Email };
+        _userManager.Setup(x => x.FindByIdAsync("1")).ReturnsAsync(user);
+        _userManager.Setup(x => x.ConfirmEmailAsync(user, It.IsAny<string>())).ReturnsAsync(IdentityResult.Success);
+        var service = CreateService();
+
+        var result = await service.ConfirmEmailAsync(new ConfirmEmailRequestDto
+        {
+            UserId = "1",
+            Code = Base64UrlEncode("code")
+        });
+
+        Assert.True(result.Value!.IsSuccess);
+    }
+
+    private static string Base64UrlEncode(string value) =>
+        Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(value)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     private void SetUpJwtTokenServiceToReturn(string token)
     {

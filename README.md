@@ -44,7 +44,7 @@ this package doesn't ship notification delivery itself.
 
 ## Design: opt-in modules, capability interfaces instead of one big user contract
 
-Everything is generic over `TUser : IdentityUser`, but the four pieces below aren't
+Everything is generic over `TUser : IdentityUser`, but the three pieces below aren't
 one monolithic registration — each is opt-in, and each capability beyond bare
 `IdentityUser` is its own small interface your `TUser` implements only if you use the
 module that needs it. Skip a module, never see its interface. Opt into one without
@@ -52,18 +52,30 @@ the matching interface, and it's a compile error, not a silent no-op.
 
 | Module | Registration | Requires on `TUser` | Endpoints |
 |---|---|---|---|
-| Core | `AddAuthCore<TUser>()` + `MapAuthCore<TUser>()` | nothing extra | register, login, login2fa, secure |
+| Core | `AddAuthCore<TUser>()` + `MapAuthCore<TUser>()` | nothing extra | register, login, secure, forgotpassword, resetpassword, changepassword, sendemailconfirmation, confirmEmail |
 | Account activation | `AddAccountActivation<TUser>()` + `MapAccountActivation<TUser>()` | nothing extra (see below) | getuserbyemail |
-| Admin provisioning | `AddAdminProvisioning<TUser>()` + `MapAdminProvisioning<TUser>()` | `IAdminProvisionableUser` | forgotpassword, resetpassword, changepassword, sendemailconfirmation, confirmEmail |
-| Two-factor | `Add2Fa<TUser>()` + `Map2Fa<TUser>()` | `IMultiFactorMethodUser` | sendtwofacode, enableauthenticator, verifyauthenticator, resetauthenticator |
+| Two-factor | `Add2Fa<TUser>()` + `Map2Fa<TUser>()` | `IMultiFactorMethodUser` | login2fa, sendtwofacode, enableauthenticator, verifyauthenticator, resetauthenticator |
 
-Account activation is the one exception worth calling out: `getuserbyemail` doesn't
-itself need anything beyond `IdentityUser`, but if you also want the **core login
-endpoint** to reject inactive users, register an `IActivationPolicy<TUser>` — either
-the built-in default (`AddDefaultActivationPolicy<TUser>()`, if `TUser` implements
-`IActivatableUser`, a plain `bool IsActive` flag) or your own, for anything more than
-a single flag. Core's login honors whichever policy is registered, if any — it works
-identically with no policy registered at all.
+Two things worth calling out:
+
+- **Account activation:** `getuserbyemail` doesn't itself need anything beyond
+  `IdentityUser`, but if you also want the **core login endpoint** to reject inactive
+  users, register an `IActivationPolicy<TUser>` — either the built-in default
+  (`AddDefaultActivationPolicy<TUser>()`, if `TUser` implements `IActivatableUser`, a
+  plain `bool IsActive` flag) or your own, for anything more than a single flag.
+  Core's login honors whichever policy is registered, if any — it works identically
+  with no policy registered at all.
+- **`login2fa` lives in the two-factor module, not core**, even though `login` (the
+  request that reports a second factor is required) is core. Nothing can ever put a
+  user into a 2FA-required state without `Add2Fa`'s enroll/verify flow having enabled
+  it first, so `login2fa` would be permanently unreachable without that module —
+  keeping it there is what makes it work, not just where it happens to live.
+- **`IAdminProvisionableUser`** (`bool HasSetPassword`) is an *optional* enhancement
+  on top of core's password/email endpoints, not a capability any module hard-requires.
+  If `TUser` implements it, `resetpassword` sets it and `sendemailconfirmation` bundles
+  a first-login password-reset link for accounts that haven't set one yet (e.g.
+  admin-created accounts). If `TUser` doesn't implement it, both endpoints work exactly
+  the same, minus that enhancement — there's no separate module to opt into.
 
 ## Usage
 
@@ -90,7 +102,6 @@ builder.Services.AddAuthCore<AppUser>(builder.Configuration, user => new
 });
 builder.Services.AddAccountActivation<AppUser>();
 builder.Services.AddDefaultActivationPolicy<AppUser>();
-builder.Services.AddAdminProvisioning<AppUser>(builder.Configuration);
 builder.Services.Add2Fa<AppUser>();
 
 var app = builder.Build();
@@ -100,13 +111,12 @@ app.UseAuthorization();
 
 app.MapAuthCore<AppUser>();
 app.MapAccountActivation<AppUser>();
-app.MapAdminProvisioning<AppUser>();
 app.Map2Fa<AppUser>();
 
 app.Run();
 ```
 
-Every `MapXyz` call takes an optional route prefix (default `"/auth"`), so all four
+Every `MapXyz` call takes an optional route prefix (default `"/auth"`), so all three
 modules land under one consistent route tree if you use all of them.
 
 The `AddAuthCore` projector delegate (`Func<TUser, object>`) controls what gets
@@ -127,19 +137,19 @@ security stamp, etc.).
   },
   "Jwt2FaAuthCoreConfig": {
     "ApplicationName": "Your App",
-    "EmailConfirmationCallbackUrl": "https://your-app.example.com/email-confirmation?userId={userId}&code={code}"
-  },
-  "Jwt2FaAdminProvisioningConfig": {
-    "ForgotPasswordCallbackUrl": "https://your-app.example.com/forgot-password/reset?code={code}"
+    "FrontendBaseUrl": "https://your-app.example.com",
+    "EmailConfirmationPath": "/email-confirmation?userId={userId}&code={code}",
+    "ForgotPasswordPath": "/forgot-password/reset?code={code}"
   }
 }
 ```
 
 `AdminRoleName` is the Identity role treated as "admin" for the self-or-admin checks
 used across several endpoints (e.g. an admin looking up another user's account) —
-defaults to `"Admin"`, override if your app names it differently. The two callback
-URLs are full URL templates pointing at your frontend, with `{userId}`/`{code}`
-tokens substituted before the link is emailed.
+defaults to `"Admin"`, override if your app names it differently. `FrontendBaseUrl`
+(no trailing slash) is combined with the two path templates to build the links
+emailed to users — only the domain is configured once; the paths (and their
+`{userId}`/`{code}` tokens) can point at whatever routes your frontend actually uses.
 
 ## License
 

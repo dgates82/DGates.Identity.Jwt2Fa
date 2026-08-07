@@ -5,10 +5,18 @@ using System.Security.Claims;
 
 namespace DGates.Identity.Jwt2Fa.Services;
 
-/// <summary>2FA enrollment/delivery logic: send-code, enable/verify/reset authenticator.</summary>
+/// <summary>2FA enrollment/delivery logic: send-code, enable/verify/reset authenticator, and 2FA-completion login.</summary>
 public interface ITwoFactorService<TUser>
     where TUser : IdentityUser, IMultiFactorMethodUser
 {
+    /// <summary>
+    /// Completes login for a user who still needs to supply a second factor. Lives
+    /// here, not in core, because nothing can ever put a user into a 2FA-required
+    /// state without this module's <see cref="VerifyAuthenticatorAsync"/> having
+    /// enabled it first.
+    /// </summary>
+    Task<Jwt2FaResult<AuthResponseDto>> LoginTwoFactorAsync(TwoFaAuthRequestDto request);
+
     /// <summary>Generates and delivers a 2FA code via email or SMS.</summary>
     Task<Jwt2FaResult<ResponseDto>> SendTwoFaCodeAsync(SendVerificationCodeRequestDto request, ClaimsPrincipal caller);
 

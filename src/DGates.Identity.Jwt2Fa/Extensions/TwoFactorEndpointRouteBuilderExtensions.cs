@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Routing;
 namespace DGates.Identity.Jwt2Fa.Extensions;
 
 /// <summary>
-/// Endpoint mapping for the 2FA module: SendTwoFaCode, enableauthenticator,
+/// Endpoint mapping for the 2FA module: login2fa, SendTwoFaCode, enableauthenticator,
 /// verifyauthenticator, resetauthenticator.
 /// </summary>
 public static class TwoFactorEndpointRouteBuilderExtensions
@@ -21,6 +21,9 @@ public static class TwoFactorEndpointRouteBuilderExtensions
         where TUser : IdentityUser, IMultiFactorMethodUser
     {
         var group = endpoints.MapGroup(prefix);
+
+        group.MapPost("/login2fa", async (TwoFaAuthRequestDto request, ITwoFactorService<TUser> service) =>
+            (await service.LoginTwoFactorAsync(request)).ToIResult());
 
         group.MapPost("/sendtwofacode", async (
             SendVerificationCodeRequestDto request,

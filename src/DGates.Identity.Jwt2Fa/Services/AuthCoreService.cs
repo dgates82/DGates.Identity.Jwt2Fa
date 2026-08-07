@@ -2,7 +2,6 @@ using DGates.Identity.Jwt2Fa.Capabilities;
 using DGates.Identity.Jwt2Fa.Dtos;
 using DGates.Identity.Jwt2Fa.Extensions;
 using DGates.Identity.Jwt2Fa.Jwt;
-using DGates.Identity.Jwt2Fa.TwoFactor;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.WebUtilities;
@@ -61,9 +60,8 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
         code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
 
         var appName = _authCoreOptions.Value.ApplicationName;
-        var callbackUrl = _authCoreOptions.Value.EmailConfirmationCallbackUrl
-            .Replace("{userId}", Uri.EscapeDataString(user.Id))
-            .Replace("{code}", Uri.EscapeDataString(code));
+        var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
+            ("userId", user.Id), ("code", code));
 
         await _emailSender.SendEmailAsync(
             request.Email,
@@ -124,37 +122,139 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
     }
 
     /// <inheritdoc />
-    public async Task<Jwt2FaResult<AuthResponseDto>> LoginTwoFactorAsync(TwoFaAuthRequestDto request)
+    public async Task<Jwt2FaResult<ResponseDto>> ForgotPasswordAsync(ForgotPasswordDto request)
+    {
+        var user = await _userManager.FindByEmailAsync(request.Email);
+        if (user is null || !await _userManager.IsEmailConfirmedAsync(user))
+        {
+            // Don't reveal that the user does not exist or is not confirmed.
+            return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = false });
+        }
+
+        var code = await _userManager.GeneratePasswordResetTokenAsync(user);
+        code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
+
+        var appName = _authCoreOptions.Value.ApplicationName;
+        var callbackUrl = BuildUrl(_authCoreOptions.Value.ForgotPasswordPath, ("code", code));
+
+        await _emailSender.SendEmailAsync(
+            request.Email,
+            $"{appName} Password Reset",
+            $"Forgot your password?<br/>We received a request to reset the password for your account.<br/><br/>" +
+            $"To reset your password <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>click here</a>.<br/><br/>" +
+            $"If you did not request a password reset please ignore this email.");
+
+        return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = true });
+    }
+
+    /// <inheritdoc />
+    public async Task<Jwt2FaResult<ResponseDto>> ResetPasswordAsync(ResetPasswordRequestDto request)
     {
         var user = await _userManager.FindByEmailAsync(request.Email);
         if (user is null)
         {
             // Don't reveal that the user does not exist.
-            return Jwt2FaResult<AuthResponseDto>.Ok(new AuthResponseDto { IsAuthSuccessful = false });
+            return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = false });
         }
 
-        var tokenProvider = TwoFactorProviderNames.Resolve(request.TwoFactorProvider);
-        if (tokenProvider is null)
+        var code = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(request.Code));
+        var result = await _userManager.ResetPasswordAsync(user, code, request.Password);
+
+        if (result.Succeeded && user is IAdminProvisionableUser provisionable)
         {
-            return Jwt2FaResult<AuthResponseDto>.Ok(
-                new AuthResponseDto { IsAuthSuccessful = false, ErrorMessage = "Invalid Authentication Code" });
+            provisionable.HasSetPassword = true;
+            await _userManager.UpdateAsync(user);
         }
 
-        var isValid = await _userManager.VerifyTwoFactorTokenAsync(user, tokenProvider, request.TwoFactorCode);
-        if (!isValid)
+        return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto
         {
-            return Jwt2FaResult<AuthResponseDto>.Ok(
-                new AuthResponseDto { IsAuthSuccessful = false, ErrorMessage = "Invalid Authentication Code" });
-        }
-
-        var token = await IssueTokenAsync(user);
-        return Jwt2FaResult<AuthResponseDto>.Ok(new AuthResponseDto
-        {
-            IsAuthSuccessful = true,
-            Token = token,
-            RequiresTwoFactor = true,
-            User = _userProjector(user)
+            IsSuccess = result.Succeeded,
+            Message = result.Succeeded ? null : string.Join(" ", result.Errors.Select(e => e.Description))
         });
+    }
+
+    /// <inheritdoc />
+    public async Task<Jwt2FaResult<ResponseDto>> ChangePasswordAsync(ChangePasswordRequestDto request)
+    {
+        var user = await _userManager.FindByEmailAsync(request.Email);
+        if (user is null)
+        {
+            // Don't reveal that the user does not exist.
+            return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = false });
+        }
+
+        var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            var errorMessage = string.Join(" ", result.Errors.Select(e => e.Description));
+            return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = false, Message = errorMessage });
+        }
+
+        await _signInManager.RefreshSignInAsync(user);
+
+        return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = true, Message = "Your password has been set." });
+    }
+
+    /// <inheritdoc />
+    public async Task<Jwt2FaResult<ResponseDto>> SendEmailConfirmationAsync(SendEmailConfirmationRequestDto request)
+    {
+        var user = await _userManager.FindByEmailAsync(request.Email);
+        if (user is null)
+        {
+            return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = false });
+        }
+
+        var emailCode = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+        emailCode = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(emailCode));
+
+        var appName = _authCoreOptions.Value.ApplicationName;
+        var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
+            ("userId", user.Id), ("code", emailCode));
+
+        // Admin-created accounts haven't set their own password yet — bundle a
+        // password reset code into the same link so first login can set one. Only
+        // meaningful (and only checked) if TUser tracks that state at all.
+        if (user is IAdminProvisionableUser { HasSetPassword: false })
+        {
+            var passwordResetCode = await _userManager.GeneratePasswordResetTokenAsync(user);
+            passwordResetCode = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(passwordResetCode));
+            callbackUrl += $"&passwordResetCode={Uri.EscapeDataString(passwordResetCode)}&isFirstLogin=true";
+        }
+
+        await _emailSender.SendEmailAsync(
+            request.Email,
+            $"{appName} Email Confirmation",
+            $"In order to start using {appName}, you need to verify your email.<br/><br/>" +
+            $"Please confirm your account by <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>clicking here</a>.<br/><br/>" +
+            $"If you did not request a login to {appName}, please ignore this email.");
+
+        return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = true });
+    }
+
+    /// <inheritdoc />
+    public async Task<Jwt2FaResult<ResponseDto>> ConfirmEmailAsync(ConfirmEmailRequestDto request)
+    {
+        var user = await _userManager.FindByIdAsync(request.UserId);
+        if (user is null)
+        {
+            // Don't reveal that the user does not exist.
+            return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = false });
+        }
+
+        var emailCode = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(request.Code));
+        var result = await _userManager.ConfirmEmailAsync(user, emailCode);
+
+        return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = result.Succeeded });
+    }
+
+    private string BuildUrl(string pathTemplate, params (string Token, string Value)[] substitutions)
+    {
+        var url = _authCoreOptions.Value.FrontendBaseUrl + pathTemplate;
+        foreach (var (token, value) in substitutions)
+        {
+            url = url.Replace($"{{{token}}}", Uri.EscapeDataString(value));
+        }
+        return url;
     }
 
     private async Task<string> IssueTokenAsync(TUser user)

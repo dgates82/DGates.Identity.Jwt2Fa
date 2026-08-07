@@ -17,6 +17,8 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
 {
     private readonly UserManager<TUser> _userManager;
     private readonly SignInManager<TUser> _signInManager;
+    private readonly IJwtTokenService<TUser> _jwtTokenService;
+    private readonly Jwt2FaUserProjector<TUser> _userProjector;
     private readonly IEmailSender _emailSender;
     private readonly ISmsSender _smsSender;
     private readonly IOptions<AuthCoreOptions> _authCoreOptions;
@@ -26,6 +28,8 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
     public TwoFactorService(
         UserManager<TUser> userManager,
         SignInManager<TUser> signInManager,
+        IJwtTokenService<TUser> jwtTokenService,
+        Jwt2FaUserProjector<TUser> userProjector,
         IEmailSender emailSender,
         ISmsSender smsSender,
         IOptions<AuthCoreOptions> authCoreOptions,
@@ -33,10 +37,46 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
     {
         _userManager = userManager;
         _signInManager = signInManager;
+        _jwtTokenService = jwtTokenService;
+        _userProjector = userProjector;
         _emailSender = emailSender;
         _smsSender = smsSender;
         _authCoreOptions = authCoreOptions;
         _jwtOptions = jwtOptions;
+    }
+
+    /// <inheritdoc />
+    public async Task<Jwt2FaResult<AuthResponseDto>> LoginTwoFactorAsync(TwoFaAuthRequestDto request)
+    {
+        var user = await _userManager.FindByEmailAsync(request.Email);
+        if (user is null)
+        {
+            // Don't reveal that the user does not exist.
+            return Jwt2FaResult<AuthResponseDto>.Ok(new AuthResponseDto { IsAuthSuccessful = false });
+        }
+
+        var tokenProvider = TwoFactorProviderNames.Resolve(request.TwoFactorProvider);
+        if (tokenProvider is null)
+        {
+            return Jwt2FaResult<AuthResponseDto>.Ok(
+                new AuthResponseDto { IsAuthSuccessful = false, ErrorMessage = "Invalid Authentication Code" });
+        }
+
+        var isValid = await _userManager.VerifyTwoFactorTokenAsync(user, tokenProvider, request.TwoFactorCode);
+        if (!isValid)
+        {
+            return Jwt2FaResult<AuthResponseDto>.Ok(
+                new AuthResponseDto { IsAuthSuccessful = false, ErrorMessage = "Invalid Authentication Code" });
+        }
+
+        var token = await IssueTokenAsync(user);
+        return Jwt2FaResult<AuthResponseDto>.Ok(new AuthResponseDto
+        {
+            IsAuthSuccessful = true,
+            Token = token,
+            RequiresTwoFactor = true,
+            User = _userProjector(user)
+        });
     }
 
     /// <inheritdoc />
@@ -218,6 +258,14 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
             && await _userManager.IsInRoleAsync(currentUser, _jwtOptions.Value.AdminRoleName);
 
         return !isSelf && !isAdmin ? Jwt2FaResult<T>.BadRequest(forbiddenMessage) : null;
+    }
+
+    private async Task<string> IssueTokenAsync(TUser user)
+    {
+        var roles = await _userManager.GetRolesAsync(user);
+        var signingCredentials = _jwtTokenService.GetSigningCredentials();
+        var claims = _jwtTokenService.GetClaims(user, roles);
+        return _jwtTokenService.WriteToken(_jwtTokenService.GenerateToken(signingCredentials, claims));
     }
 
     private async Task<string> GetOrCreateUnformattedKey(TUser user)

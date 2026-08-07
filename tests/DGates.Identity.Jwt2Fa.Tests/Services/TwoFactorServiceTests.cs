@@ -7,7 +7,10 @@ using DGates.Identity.NotificationProviders.Abstractions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Moq;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace DGates.Identity.Jwt2Fa.Tests.Services;
 
@@ -17,12 +20,15 @@ public class TwoFactorServiceTests
 
     private readonly Mock<UserManager<TestUser>> _userManager = IdentityMockFactory.CreateUserManagerMock<TestUser>();
     private readonly Mock<SignInManager<TestUser>> _signInManager;
+    private readonly Mock<IJwtTokenService<TestUser>> _jwtTokenService = new();
     private readonly Mock<IEmailSender> _emailSender = new();
     private readonly Mock<ISmsSender> _smsSender = new();
     private readonly IOptions<AuthCoreOptions> _authCoreOptions = Options.Create(new AuthCoreOptions
     {
         ApplicationName = "Test App",
-        EmailConfirmationCallbackUrl = "https://app.example.com/email-confirmation?userId={userId}&code={code}"
+        FrontendBaseUrl = "https://app.example.com",
+        EmailConfirmationPath = "/email-confirmation?userId={userId}&code={code}",
+        ForgotPasswordPath = "/forgot-password/reset?code={code}"
     });
     private readonly IOptions<JwtOptions> _jwtOptions = Options.Create(new JwtOptions
     {
@@ -38,7 +44,106 @@ public class TwoFactorServiceTests
     }
 
     private TwoFactorService<TestUser> CreateService() => new(
-        _userManager.Object, _signInManager.Object, _emailSender.Object, _smsSender.Object, _authCoreOptions, _jwtOptions);
+        _userManager.Object,
+        _signInManager.Object,
+        _jwtTokenService.Object,
+        user => new { user.Id },
+        _emailSender.Object,
+        _smsSender.Object,
+        _authCoreOptions,
+        _jwtOptions);
+
+    [Fact]
+    public async Task LoginTwoFactorAsync_WithUnknownUser_ReturnsOk()
+    {
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync((TestUser?)null);
+        var service = CreateService();
+
+        var result = await service.LoginTwoFactorAsync(new TwoFaAuthRequestDto
+        {
+            Email = Email,
+            TwoFactorProvider = "Email",
+            TwoFactorCode = "123456"
+        });
+
+        Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
+        Assert.False(result.Value!.IsAuthSuccessful);
+    }
+
+    [Fact]
+    public async Task LoginTwoFactorAsync_WithUnknownProvider_ReturnsOkWithError()
+    {
+        var user = new TestUser { Id = "1", Email = Email };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        var service = CreateService();
+
+        var result = await service.LoginTwoFactorAsync(new TwoFaAuthRequestDto
+        {
+            Email = Email,
+            TwoFactorProvider = "NotARealProvider",
+            TwoFactorCode = "123456"
+        });
+
+        Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
+        Assert.False(result.Value!.IsAuthSuccessful);
+        Assert.Equal("Invalid Authentication Code", result.Value.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task LoginTwoFactorAsync_WithInvalidCode_ReturnsOkWithError()
+    {
+        var user = new TestUser { Id = "1", Email = Email };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.VerifyTwoFactorTokenAsync(user, "Email", "000000")).ReturnsAsync(false);
+        var service = CreateService();
+
+        var result = await service.LoginTwoFactorAsync(new TwoFaAuthRequestDto
+        {
+            Email = Email,
+            TwoFactorProvider = "Email",
+            TwoFactorCode = "000000"
+        });
+
+        Assert.False(result.Value!.IsAuthSuccessful);
+        Assert.Equal("Invalid Authentication Code", result.Value.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task LoginTwoFactorAsync_WithValidCode_ReturnsTokenAndProjectedUser()
+    {
+        var user = new TestUser { Id = "1", Email = Email };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.VerifyTwoFactorTokenAsync(user, "Email", "123456")).ReturnsAsync(true);
+        _userManager.Setup(x => x.GetRolesAsync(user)).ReturnsAsync(new List<string>());
+        SetUpJwtTokenServiceToReturn("signed.jwt.token");
+        var service = CreateService();
+
+        var result = await service.LoginTwoFactorAsync(new TwoFaAuthRequestDto
+        {
+            Email = Email,
+            TwoFactorProvider = "Email",
+            TwoFactorCode = "123456"
+        });
+
+        Assert.True(result.Value!.IsAuthSuccessful);
+        Assert.Equal("signed.jwt.token", result.Value.Token);
+        Assert.True(result.Value.RequiresTwoFactor);
+        Assert.NotNull(result.Value.User);
+    }
+
+    private void SetUpJwtTokenServiceToReturn(string token)
+    {
+        var credentials = new SigningCredentials(
+            new SymmetricSecurityKey(new byte[32]), SecurityAlgorithms.HmacSha256);
+        _jwtTokenService.Setup(x => x.GetSigningCredentials()).Returns(credentials);
+        _jwtTokenService
+            .Setup(x => x.GetClaims(It.IsAny<TestUser>(), It.IsAny<IList<string>>()))
+            .Returns(new List<Claim>());
+        _jwtTokenService
+            .Setup(x => x.GenerateToken(credentials, It.IsAny<IList<Claim>>()))
+            .Returns(new JwtSecurityToken());
+        _jwtTokenService.Setup(x => x.WriteToken(It.IsAny<JwtSecurityToken>())).Returns(token);
+    }
 
     [Fact]
     public async Task SendTwoFaCodeAsync_ForEnrolledUser_SkipsAuthCheckAndSendsEmail()

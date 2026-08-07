@@ -7,7 +7,10 @@ using Microsoft.AspNetCore.Routing;
 
 namespace DGates.Identity.Jwt2Fa.Extensions;
 
-/// <summary>Endpoint mapping for the core module: register, login, login2fa, secure.</summary>
+/// <summary>
+/// Endpoint mapping for the core module: register, login, secure, and the password/email
+/// lifecycle (forgotpassword, resetpassword, changepassword, sendemailconfirmation, confirmEmail).
+/// </summary>
 public static class AuthCoreEndpointRouteBuilderExtensions
 {
     /// <summary>
@@ -26,10 +29,23 @@ public static class AuthCoreEndpointRouteBuilderExtensions
         group.MapPost("/login", async (AuthRequestDto request, IAuthCoreService<TUser> service) =>
             (await service.LoginAsync(request)).ToIResult());
 
-        group.MapPost("/login2fa", async (TwoFaAuthRequestDto request, IAuthCoreService<TUser> service) =>
-            (await service.LoginTwoFactorAsync(request)).ToIResult());
-
         group.MapGet("/secure", () => Results.Ok("Got it!")).RequireAuthorization();
+
+        group.MapPost("/forgotpassword", async (ForgotPasswordDto request, IAuthCoreService<TUser> service) =>
+            (await service.ForgotPasswordAsync(request)).ToIResult());
+
+        group.MapPost("/resetpassword", async (ResetPasswordRequestDto request, IAuthCoreService<TUser> service) =>
+            (await service.ResetPasswordAsync(request)).ToIResult());
+
+        group.MapPost("/changepassword", async (ChangePasswordRequestDto request, IAuthCoreService<TUser> service) =>
+            (await service.ChangePasswordAsync(request)).ToIResult())
+            .RequireAuthorization();
+
+        group.MapPost("/sendemailconfirmation", async (SendEmailConfirmationRequestDto request, IAuthCoreService<TUser> service) =>
+            (await service.SendEmailConfirmationAsync(request)).ToIResult());
+
+        group.MapPost("/confirmEmail", async (ConfirmEmailRequestDto request, IAuthCoreService<TUser> service) =>
+            (await service.ConfirmEmailAsync(request)).ToIResult());
 
         return group;
     }

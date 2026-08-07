@@ -19,7 +19,7 @@ using System.Net.Http.Json;
 namespace DGates.Identity.Jwt2Fa.Tests.Integration;
 
 /// <summary>
-/// Builds a real ASP.NET Core pipeline (routing, JWT bearer auth, all four Jwt2Fa
+/// Builds a real ASP.NET Core pipeline (routing, JWT bearer auth, all three Jwt2Fa
 /// modules) over a SQLite in-memory Identity store — a fresh instance per test class
 /// via xUnit's <see cref="IAsyncLifetime"/>, since xUnit creates a new test class
 /// instance per <c>[Fact]</c> by default, giving every test its own isolated database.
@@ -52,10 +52,9 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                 ["Jwt2FaConfig:ExpiryInMinutes"] = "30",
                 ["Jwt2FaConfig:AdminRoleName"] = "Admin",
                 ["Jwt2FaAuthCoreConfig:ApplicationName"] = "Test App",
-                ["Jwt2FaAuthCoreConfig:EmailConfirmationCallbackUrl"] =
-                    "https://app.example.com/email-confirmation?userId={userId}&code={code}",
-                ["Jwt2FaAdminProvisioningConfig:ForgotPasswordCallbackUrl"] =
-                    "https://app.example.com/forgot-password/reset?code={code}"
+                ["Jwt2FaAuthCoreConfig:FrontendBaseUrl"] = "https://app.example.com",
+                ["Jwt2FaAuthCoreConfig:EmailConfirmationPath"] = "/email-confirmation?userId={userId}&code={code}",
+                ["Jwt2FaAuthCoreConfig:ForgotPasswordPath"] = "/forgot-password/reset?code={code}"
             })
             .Build();
 
@@ -92,7 +91,6 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                     services.AddAuthCore(configuration, projector);
                     services.AddAccountActivation<TestUser>();
                     services.AddDefaultActivationPolicy<TestUser>();
-                    services.AddAdminProvisioning<TestUser>(configuration);
                     services.Add2Fa<TestUser>();
                 });
                 webBuilder.Configure(app =>
@@ -104,7 +102,6 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                     {
                         endpoints.MapAuthCore<TestUser>();
                         endpoints.MapAccountActivation<TestUser>();
-                        endpoints.MapAdminProvisioning<TestUser>();
                         endpoints.Map2Fa<TestUser>();
                     });
                 });
