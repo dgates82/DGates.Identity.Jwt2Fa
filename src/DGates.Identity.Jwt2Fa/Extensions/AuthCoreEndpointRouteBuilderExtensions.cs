@@ -11,7 +11,8 @@ namespace DGates.Identity.Jwt2Fa.Extensions;
 /// Endpoint mapping for the core module: register, login, secure, the password/email
 /// lifecycle (forgotpassword, resetpassword, changepassword, sendemailconfirmation,
 /// confirmEmail), and account lookup/management (getuserbyemail, getuserbyid,
-/// listusers, admincreateuser — the last three require <see cref="Jwt2FaPolicies.AdminOnly"/>).
+/// listusers, admincreateuser, adminupdateuser — the last four require
+/// <see cref="Jwt2FaPolicies.AdminOnly"/>).
 /// </summary>
 public static class AuthCoreEndpointRouteBuilderExtensions
 {
@@ -66,6 +67,10 @@ public static class AuthCoreEndpointRouteBuilderExtensions
 
         group.MapPost("/admincreateuser", async (AdminCreateUserRequestDto request, IAuthCoreService<TUser> service) =>
             (await service.AdminCreateUserAsync(request)).ToIResult()
+        ).RequireAuthorization(Jwt2FaPolicies.AdminOnly);
+
+        group.MapPut("/adminupdateuser/{id}", async (string id, AdminUpdateUserRequestDto request, IAuthCoreService<TUser> service) =>
+            (await service.AdminUpdateUserAsync(id, request)).ToIResult()
         ).RequireAuthorization(Jwt2FaPolicies.AdminOnly);
 
         return group;

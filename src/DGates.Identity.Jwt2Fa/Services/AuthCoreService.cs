@@ -295,6 +295,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
     {
         page = page < 1 ? 1 : page;
         pageSize = pageSize < 1 ? 20 : pageSize;
+        pageSize = Math.Min(pageSize, _authCoreOptions.Value.MaxPageSize);
 
         // UserManager.Users is a plain IQueryable<TUser> with no async guarantee unless the
         // consumer's store happens to be EF Core — this package doesn't take an EF Core
@@ -360,6 +361,74 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
             $"An account has been created for you on {appName}.<br/><br/>" +
             $"Please confirm your account and set your password by <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>clicking here</a>.<br/><br/>" +
             $"If you were not expecting this, please ignore this email.");
+
+        await PopulateRolesIfAwareAsync(user);
+
+        return Jwt2FaResult<object>.Ok(_userProjector(user));
+    }
+
+    /// <inheritdoc />
+    public async Task<Jwt2FaResult<object>> AdminUpdateUserAsync(string id, AdminUpdateUserRequestDto request)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user is null)
+        {
+            return Jwt2FaResult<object>.NotFound($"No user found with id '{id}'.");
+        }
+
+        if (!string.Equals(user.Email, request.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            var emailResult = await _userManager.SetEmailAsync(user, request.Email);
+            if (!emailResult.Succeeded)
+            {
+                return Jwt2FaResult<object>.BadRequest(emailResult.Errors);
+            }
+
+            var userNameResult = await _userManager.SetUserNameAsync(user, request.Email);
+            if (!userNameResult.Succeeded)
+            {
+                return Jwt2FaResult<object>.BadRequest(userNameResult.Errors);
+            }
+
+            // SetEmailAsync resets EmailConfirmed to false — without re-sending confirmation,
+            // an admin renaming a user's email would silently strand them unable to log in
+            // under RequireConfirmedAccount.
+            var emailCode = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            emailCode = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(emailCode));
+
+            var appName = _authCoreOptions.Value.ApplicationName;
+            var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
+                ("userId", user.Id), ("code", emailCode));
+
+            await _emailSender.SendEmailAsync(
+                request.Email,
+                $"{appName} Email Confirmation",
+                $"Your email address on {appName} was just changed to this address by an administrator.<br/><br/>" +
+                $"Please confirm your account by <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>clicking here</a>.<br/><br/>" +
+                $"If you did not expect this change, please contact your administrator.");
+        }
+
+        var currentRoles = await _userManager.GetRolesAsync(user);
+        var rolesToAdd = request.Roles.Except(currentRoles).ToList();
+        var rolesToRemove = currentRoles.Except(request.Roles).ToList();
+
+        if (rolesToAdd.Count > 0)
+        {
+            var addResult = await _userManager.AddToRolesAsync(user, rolesToAdd);
+            if (!addResult.Succeeded)
+            {
+                return Jwt2FaResult<object>.BadRequest(addResult.Errors);
+            }
+        }
+
+        if (rolesToRemove.Count > 0)
+        {
+            var removeResult = await _userManager.RemoveFromRolesAsync(user, rolesToRemove);
+            if (!removeResult.Succeeded)
+            {
+                return Jwt2FaResult<object>.BadRequest(removeResult.Errors);
+            }
+        }
 
         await PopulateRolesIfAwareAsync(user);
 

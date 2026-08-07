@@ -38,4 +38,12 @@ public class AuthCoreOptions
     /// substituted before emailing it — e.g. <c>"/forgot-password/reset?code={code}"</c>.
     /// </summary>
     public required string ForgotPasswordPath { get; set; }
+
+    /// <summary>
+    /// The upper bound <c>listusers</c> clamps its <c>pageSize</c> query parameter to,
+    /// regardless of what the caller requests — an unbounded "give me everyone" page size
+    /// would defeat the point of paginating an admin endpoint as the user table grows.
+    /// Defaults to 100; raise it if a smaller table genuinely needs bigger pages.
+    /// </summary>
+    public int MaxPageSize { get; set; } = 100;
 }

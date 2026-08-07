@@ -101,6 +101,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                     {
                         endpoints.MapAuthCore<TestUser>();
                         endpoints.Map2Fa<TestUser>();
+                        endpoints.MapDefaultActivationPolicy<TestUser>();
                     });
                 });
             });
@@ -150,23 +151,39 @@ public abstract class IntegrationTestBase : IAsyncLifetime
 
     /// <summary>
     /// Adds a user to a role directly via <see cref="RoleManager{TRole}"/>/<see cref="UserManager{TUser}"/>,
-    /// bypassing HTTP — this package doesn't expose a role-management endpoint. Creates the
-    /// role first if it doesn't already exist. A user with an already-issued JWT needs to
-    /// log in again afterward to get a token carrying the new role claim.
+    /// bypassing HTTP — a shortcut for getting a role in place before it matters for a test
+    /// (e.g. promoting the test's own admin caller before exercising admin endpoints),
+    /// distinct from exercising <c>adminupdateuser</c>'s own role-diffing itself. Creates
+    /// the role first if it doesn't already exist. A user with an already-issued JWT needs
+    /// to log in again afterward to get a token carrying the new role claim.
     /// </summary>
     protected async Task AddToRoleAsync(string email, string role)
     {
         using var scope = _host.Services.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<TestUser>>();
+
+        await EnsureRoleExistsAsync(role);
+
+        var user = await userManager.FindByEmailAsync(email);
+        await userManager.AddToRoleAsync(user!, role);
+    }
+
+    /// <summary>
+    /// Creates a role via <see cref="RoleManager{TRole}"/> if it doesn't already exist,
+    /// without assigning it to anyone — for tests that need a role to exist before
+    /// <c>adminupdateuser</c> can assign it via HTTP (Identity requires roles to
+    /// pre-exist; it won't create one on the fly the way <see cref="AddToRoleAsync"/> does
+    /// as a test convenience).
+    /// </summary>
+    protected async Task EnsureRoleExistsAsync(string role)
+    {
+        using var scope = _host.Services.CreateScope();
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
 
         if (!await roleManager.RoleExistsAsync(role))
         {
             await roleManager.CreateAsync(new IdentityRole(role));
         }
-
-        var user = await userManager.FindByEmailAsync(email);
-        await userManager.AddToRoleAsync(user!, role);
     }
 
     protected static HttpRequestMessage AuthorizedRequest(HttpMethod method, string url, string token)
