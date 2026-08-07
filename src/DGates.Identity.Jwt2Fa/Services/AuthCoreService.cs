@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Encodings.Web;
 
@@ -21,11 +22,13 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
     private readonly Jwt2FaUserProjector<TUser> _userProjector;
     private readonly IEmailSender _emailSender;
     private readonly IOptions<AuthCoreOptions> _authCoreOptions;
+    private readonly IOptions<JwtOptions> _jwtOptions;
     private readonly IActivationPolicy<TUser>? _activationPolicy;
 
     /// <summary>
     /// Creates the service. <paramref name="activationPolicy"/> is optional so <see cref="LoginAsync"/>
-    /// honors it when <c>AddAccountActivation</c> registered one, without core requiring it.
+    /// honors it when a policy is registered (e.g. via <c>AddDefaultActivationPolicy</c> or your
+    /// own), without core requiring it.
     /// </summary>
     public AuthCoreService(
         UserManager<TUser> userManager,
@@ -34,6 +37,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
         Jwt2FaUserProjector<TUser> userProjector,
         IEmailSender emailSender,
         IOptions<AuthCoreOptions> authCoreOptions,
+        IOptions<JwtOptions> jwtOptions,
         IActivationPolicy<TUser>? activationPolicy = null)
     {
         _userManager = userManager;
@@ -42,6 +46,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
         _userProjector = userProjector;
         _emailSender = emailSender;
         _authCoreOptions = authCoreOptions;
+        _jwtOptions = jwtOptions;
         _activationPolicy = activationPolicy;
     }
 
@@ -245,6 +250,29 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
         var result = await _userManager.ConfirmEmailAsync(user, emailCode);
 
         return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = result.Succeeded });
+    }
+
+    /// <inheritdoc />
+    public async Task<Jwt2FaResult<object>> GetUserByEmailAsync(string email, ClaimsPrincipal caller)
+    {
+        var user = await _userManager.FindByEmailAsync(email);
+        if (user is null)
+        {
+            return Jwt2FaResult<object>.Ok(new ResponseDto { IsSuccess = false });
+        }
+
+        var currentUser = await _userManager.GetUserAsync(caller);
+        var isSelf = currentUser is not null && currentUser.Id == user.Id;
+        var isAdmin = currentUser is not null
+            && await _userManager.IsInRoleAsync(currentUser, _jwtOptions.Value.AdminRoleName);
+
+        if (!isSelf && !isAdmin)
+        {
+            return Jwt2FaResult<object>.BadRequest(
+                "You can only look up your own account. Looking up another account requires the admin role.");
+        }
+
+        return Jwt2FaResult<object>.Ok(_userProjector(user));
     }
 
     private string BuildUrl(string pathTemplate, params (string Token, string Value)[] substitutions)

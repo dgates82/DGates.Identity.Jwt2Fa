@@ -36,46 +36,44 @@ case: your own first-party client(s) authenticating directly against your own AP
 dotnet add package DGates.Identity.Jwt2Fa
 ```
 
-You'll also need *some* implementation of `Microsoft.AspNetCore.Identity.UI.Services.IEmailSender`
-(used by registration, password reset, and email 2FA) and, if you use SMS 2FA, an
-`ISmsSender` from
-[`DGates.Identity.NotificationProviders`](https://github.com/dgates82/DGates.Identity.NotificationProviders) —
-this package doesn't ship notification delivery itself.
+You'll also need an `IEmailSender` (`Microsoft.AspNetCore.Identity.UI.Services.IEmailSender`
+— used by registration, password reset, and email 2FA) and, if you use SMS 2FA, an
+`ISmsSender` — this package doesn't ship notification delivery itself.
+[`DGates.Identity.NotificationProviders`](https://github.com/dgates82/DGates.Identity.NotificationProviders)
+covers both in one package (SMTP/SendGrid/Postmark for email, Twilio/AWS SNS for SMS),
+or bring your own implementation of either interface.
 
 ## Design: opt-in modules, capability interfaces instead of one big user contract
 
-Everything is generic over `TUser : IdentityUser`, but the three pieces below aren't
-one monolithic registration — each is opt-in, and each capability beyond bare
-`IdentityUser` is its own small interface your `TUser` implements only if you use the
-module that needs it. Skip a module, never see its interface. Opt into one without
-the matching interface, and it's a compile error, not a silent no-op.
+Everything is generic over `TUser : IdentityUser`, but the two pieces below aren't one
+monolithic registration — each is opt-in, and each capability beyond bare `IdentityUser`
+is its own small interface your `TUser` implements only if you use the module that
+needs it. Skip a module, never see its interface. Opt into one without the matching
+interface, and it's a compile error, not a silent no-op.
 
 | Module | Registration | Requires on `TUser` | Endpoints |
 |---|---|---|---|
-| Core | `AddAuthCore<TUser>()` + `MapAuthCore<TUser>()` | nothing extra | register, login, secure, forgotpassword, resetpassword, changepassword, sendemailconfirmation, confirmEmail |
-| Account activation | `AddAccountActivation<TUser>()` + `MapAccountActivation<TUser>()` | nothing extra (see below) | getuserbyemail |
+| Core | `AddAuthCore<TUser>()` + `MapAuthCore<TUser>()` | nothing extra (optionally honors `IActivationPolicy<TUser>` if registered — see below) | register, login, secure, getuserbyemail, forgotpassword, resetpassword, changepassword, sendemailconfirmation, confirmEmail |
 | Two-factor | `Add2Fa<TUser>()` + `Map2Fa<TUser>()` | `IMultiFactorMethodUser` | login2fa, sendtwofacode, enableauthenticator, verifyauthenticator, resetauthenticator |
 
-Two things worth calling out:
+Two capabilities layer on top of core as pure enhancements — neither is its own module,
+and core works fine with neither registered:
 
-- **Account activation:** `getuserbyemail` doesn't itself need anything beyond
-  `IdentityUser`, but if you also want the **core login endpoint** to reject inactive
-  users, register an `IActivationPolicy<TUser>` — either the built-in default
-  (`AddDefaultActivationPolicy<TUser>()`, if `TUser` implements `IActivatableUser`, a
-  plain `bool IsActive` flag) or your own, for anything more than a single flag.
-  Core's login honors whichever policy is registered, if any — it works identically
-  with no policy registered at all.
-- **`login2fa` lives in the two-factor module, not core**, even though `login` (the
-  request that reports a second factor is required) is core. Nothing can ever put a
-  user into a 2FA-required state without `Add2Fa`'s enroll/verify flow having enabled
-  it first, so `login2fa` would be permanently unreachable without that module —
-  keeping it there is what makes it work, not just where it happens to live.
-- **`IAdminProvisionableUser`** (`bool HasSetPassword`) is an *optional* enhancement
-  on top of core's password/email endpoints, not a capability any module hard-requires.
-  If `TUser` implements it, `resetpassword` sets it and `sendemailconfirmation` bundles
-  a first-login password-reset link for accounts that haven't set one yet (e.g.
-  admin-created accounts). If `TUser` doesn't implement it, both endpoints work exactly
-  the same, minus that enhancement — there's no separate module to opt into.
+**Optional activation gate.** `login` normally succeeds for any valid credentials. To
+make it reject inactive users too, register an `IActivationPolicy<TUser>` — the
+built-in `AddDefaultActivationPolicy<TUser>()` (requires `IActivatableUser`, a plain
+`bool IsActive`) or your own for anything more complex. `login` honors whichever
+policy is registered, or works the same with none at all.
+
+**`IAdminProvisionableUser` enhances two endpoints.** If `TUser` implements it,
+`resetpassword`/`sendemailconfirmation` handle the admin-created-account first-login
+flow automatically. If not, both endpoints still work — just without that extra
+behavior.
+
+One thing worth knowing about `login2fa`: it lives in `Add2Fa`, not core, even though
+`login` (which reports a second factor is required) is core. Nothing else in the
+package can ever put a user into a 2FA-required state, so completing one is `Add2Fa`'s
+job specifically.
 
 ## Usage
 
@@ -100,7 +98,6 @@ builder.Services.AddAuthCore<AppUser>(builder.Configuration, user => new
     user.Email,
     user.TwoFactorEnabled
 });
-builder.Services.AddAccountActivation<AppUser>();
 builder.Services.AddDefaultActivationPolicy<AppUser>();
 builder.Services.Add2Fa<AppUser>();
 
@@ -110,14 +107,13 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapAuthCore<AppUser>();
-app.MapAccountActivation<AppUser>();
 app.Map2Fa<AppUser>();
 
 app.Run();
 ```
 
-Every `MapXyz` call takes an optional route prefix (default `"/auth"`), so all three
-modules land under one consistent route tree if you use all of them.
+Every `MapXyz` call takes an optional route prefix (default `"/auth"`), so both
+modules land under one consistent route tree if you use both.
 
 The `AddAuthCore` projector delegate (`Func<TUser, object>`) controls what gets
 embedded in the JWT's `"user"` claim and returned from auth responses — project down

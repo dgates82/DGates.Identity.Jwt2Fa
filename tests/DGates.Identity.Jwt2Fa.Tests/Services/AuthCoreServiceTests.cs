@@ -30,6 +30,13 @@ public class AuthCoreServiceTests
         EmailConfirmationPath = "/email-confirmation?userId={userId}&code={code}",
         ForgotPasswordPath = "/forgot-password/reset?code={code}"
     });
+    private readonly IOptions<JwtOptions> _jwtOptions = Options.Create(new JwtOptions
+    {
+        SecurityKey = "test-key-test-key-test-key-1234",
+        ValidIssuer = "issuer",
+        ValidAudience = "audience",
+        AdminRoleName = "Admin"
+    });
 
     public AuthCoreServiceTests()
     {
@@ -43,6 +50,7 @@ public class AuthCoreServiceTests
         user => new { user.Id },
         _emailSender.Object,
         _authCoreOptions,
+        _jwtOptions,
         activationPolicy);
 
     [Fact]
@@ -277,7 +285,8 @@ public class AuthCoreServiceTests
             Mock.Of<IJwtTokenService<BareUser>>(),
             u => new { u.Id },
             _emailSender.Object,
-            _authCoreOptions);
+            _authCoreOptions,
+            _jwtOptions);
 
         var result = await service.ResetPasswordAsync(new ResetPasswordRequestDto
         {
@@ -370,7 +379,8 @@ public class AuthCoreServiceTests
             Mock.Of<IJwtTokenService<BareUser>>(),
             u => new { u.Id },
             _emailSender.Object,
-            _authCoreOptions);
+            _authCoreOptions,
+            _jwtOptions);
 
         await service.SendEmailConfirmationAsync(new SendEmailConfirmationRequestDto { Email = Email });
 
@@ -392,6 +402,65 @@ public class AuthCoreServiceTests
         });
 
         Assert.True(result.Value!.IsSuccess);
+    }
+
+    [Fact]
+    public async Task GetUserByEmailAsync_WithUnknownEmail_ReturnsOkWithFailureDto()
+    {
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync((TestUser?)null);
+        var service = CreateService();
+
+        var result = await service.GetUserByEmailAsync(Email, ClaimsPrincipalHelper.ForUserId("caller-1"));
+
+        Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
+        var dto = Assert.IsType<ResponseDto>(result.Value);
+        Assert.False(dto.IsSuccess);
+    }
+
+    [Fact]
+    public async Task GetUserByEmailAsync_WhenCallerIsSelf_ReturnsProjectedUser()
+    {
+        var target = new TestUser { Id = "user-1", Email = Email };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(target);
+        _userManager.Setup(x => x.FindByIdAsync("user-1")).ReturnsAsync(target);
+        _userManager.Setup(x => x.IsInRoleAsync(target, "Admin")).ReturnsAsync(false);
+        var service = CreateService();
+
+        var result = await service.GetUserByEmailAsync(Email, ClaimsPrincipalHelper.ForUserId("user-1"));
+
+        Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
+        Assert.NotNull(result.Value);
+    }
+
+    [Fact]
+    public async Task GetUserByEmailAsync_WhenCallerIsAdmin_ReturnsProjectedUser()
+    {
+        var target = new TestUser { Id = "user-1", Email = Email };
+        var admin = new TestUser { Id = "admin-1", Email = "admin@example.com" };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(target);
+        _userManager.Setup(x => x.FindByIdAsync("admin-1")).ReturnsAsync(admin);
+        _userManager.Setup(x => x.IsInRoleAsync(admin, "Admin")).ReturnsAsync(true);
+        var service = CreateService();
+
+        var result = await service.GetUserByEmailAsync(Email, ClaimsPrincipalHelper.ForUserId("admin-1"));
+
+        Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
+        Assert.NotNull(result.Value);
+    }
+
+    [Fact]
+    public async Task GetUserByEmailAsync_WhenCallerIsNeitherSelfNorAdmin_ReturnsBadRequest()
+    {
+        var target = new TestUser { Id = "user-1", Email = Email };
+        var otherUser = new TestUser { Id = "other-1", Email = "other@example.com" };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(target);
+        _userManager.Setup(x => x.FindByIdAsync("other-1")).ReturnsAsync(otherUser);
+        _userManager.Setup(x => x.IsInRoleAsync(otherUser, "Admin")).ReturnsAsync(false);
+        var service = CreateService();
+
+        var result = await service.GetUserByEmailAsync(Email, ClaimsPrincipalHelper.ForUserId("other-1"));
+
+        Assert.Equal(Jwt2FaResultKind.BadRequest, result.Kind);
     }
 
     private static string Base64UrlEncode(string value) =>

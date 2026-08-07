@@ -19,7 +19,7 @@ using System.Net.Http.Json;
 namespace DGates.Identity.Jwt2Fa.Tests.Integration;
 
 /// <summary>
-/// Builds a real ASP.NET Core pipeline (routing, JWT bearer auth, all three Jwt2Fa
+/// Builds a real ASP.NET Core pipeline (routing, JWT bearer auth, both Jwt2Fa
 /// modules) over a SQLite in-memory Identity store — a fresh instance per test class
 /// via xUnit's <see cref="IAsyncLifetime"/>, since xUnit creates a new test class
 /// instance per <c>[Fact]</c> by default, giving every test its own isolated database.
@@ -89,7 +89,6 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                     Jwt2FaUserProjector<TestUser> projector = user => new { user.Id, user.Email };
 
                     services.AddAuthCore(configuration, projector);
-                    services.AddAccountActivation<TestUser>();
                     services.AddDefaultActivationPolicy<TestUser>();
                     services.Add2Fa<TestUser>();
                 });
@@ -101,7 +100,6 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                     app.UseEndpoints(endpoints =>
                     {
                         endpoints.MapAuthCore<TestUser>();
-                        endpoints.MapAccountActivation<TestUser>();
                         endpoints.Map2Fa<TestUser>();
                     });
                 });

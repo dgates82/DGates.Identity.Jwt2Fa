@@ -8,8 +8,9 @@ using Microsoft.AspNetCore.Routing;
 namespace DGates.Identity.Jwt2Fa.Extensions;
 
 /// <summary>
-/// Endpoint mapping for the core module: register, login, secure, and the password/email
-/// lifecycle (forgotpassword, resetpassword, changepassword, sendemailconfirmation, confirmEmail).
+/// Endpoint mapping for the core module: register, login, secure, the password/email
+/// lifecycle (forgotpassword, resetpassword, changepassword, sendemailconfirmation,
+/// confirmEmail), and getuserbyemail.
 /// </summary>
 public static class AuthCoreEndpointRouteBuilderExtensions
 {
@@ -46,6 +47,13 @@ public static class AuthCoreEndpointRouteBuilderExtensions
 
         group.MapPost("/confirmEmail", async (ConfirmEmailRequestDto request, IAuthCoreService<TUser> service) =>
             (await service.ConfirmEmailAsync(request)).ToIResult());
+
+        group.MapGet("/getuserbyemail", async (
+            string email,
+            HttpContext httpContext,
+            IAuthCoreService<TUser> service) =>
+            (await service.GetUserByEmailAsync(email, httpContext.User)).ToIResult()
+        ).RequireAuthorization();
 
         return group;
     }

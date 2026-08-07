@@ -9,7 +9,10 @@ using System.Text;
 
 namespace DGates.Identity.Jwt2Fa.Extensions;
 
-/// <summary>DI registration for the core module: JWT issuance/validation, register, login, login2fa.</summary>
+/// <summary>
+/// DI registration for the core module: JWT issuance/validation, register, login,
+/// the password/email lifecycle, and account lookup.
+/// </summary>
 public static class AuthCoreServiceCollectionExtensions
 {
     /// <summary>
