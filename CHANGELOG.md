@@ -17,9 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Four capability interfaces that opportunistically enhance core if your `TUser`
   implements them, with no loss of functionality if it doesn't: `IActivatableUser`,
   `IAdminProvisionableUser`, `IMultiFactorMethodUser`, `IRoleAwareUser`
-- Admin user-management endpoints (list/get/create/update users, activate/deactivate),
-  gated by a new `Jwt2FaPolicies.AdminOnly` policy built on JWT role claims — also usable
-  directly on your own app's endpoints via `[Authorize(Roles = "YourRole")]`
+- Admin user-management endpoints (list/get/create/update users, activate/deactivate,
+  unlock), gated by a new `Jwt2FaPolicies.AdminOnly` policy built on JWT role claims —
+  also usable directly on your own app's endpoints via `[Authorize(Roles = "YourRole")]`
 - `Jwt2FaUserProjector<TUser>` — controls what's embedded in the JWT and returned from
   auth responses, so nothing sensitive on `TUser` leaks by default
 - `Jwt2FaResult<T>` — lets the service layer signal an HTTP outcome without depending on

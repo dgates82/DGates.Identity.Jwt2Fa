@@ -186,6 +186,30 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// Puts a user into a locked-out state directly via <see cref="UserManager{TUser}"/>,
+    /// bypassing HTTP — this package's own <c>login</c> never locks anyone out
+    /// (<c>lockoutOnFailure: false</c>), so there's no HTTP path to reach this state to
+    /// set up an <c>unlock</c> test.
+    /// </summary>
+    protected async Task LockOutUserAsync(string email)
+    {
+        using var scope = _host.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<TestUser>>();
+
+        var user = await userManager.FindByEmailAsync(email);
+        await userManager.SetLockoutEndDateAsync(user!, DateTimeOffset.UtcNow.AddMinutes(30));
+    }
+
+    protected async Task<bool> IsLockedOutAsync(string email)
+    {
+        using var scope = _host.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<TestUser>>();
+
+        var user = await userManager.FindByEmailAsync(email);
+        return await userManager.IsLockedOutAsync(user!);
+    }
+
     protected static HttpRequestMessage AuthorizedRequest(HttpMethod method, string url, string token)
     {
         var request = new HttpRequestMessage(method, url);

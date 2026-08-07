@@ -435,6 +435,24 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
         return Jwt2FaResult<object>.Ok(_userProjector(user));
     }
 
+    /// <inheritdoc />
+    public async Task<Jwt2FaResult<ResponseDto>> AdminUnlockUserAsync(string id)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user is null)
+        {
+            return Jwt2FaResult<ResponseDto>.NotFound($"No user found with id '{id}'.");
+        }
+
+        var result = await _userManager.SetLockoutEndDateAsync(user, DateTimeOffset.UtcNow);
+
+        return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto
+        {
+            IsSuccess = result.Succeeded,
+            Message = result.Succeeded ? null : string.Join(" ", result.Errors.Select(e => e.Description))
+        });
+    }
+
     private async Task PopulateRolesIfAwareAsync(TUser user)
     {
         if (user is IRoleAwareUser roleAware)
