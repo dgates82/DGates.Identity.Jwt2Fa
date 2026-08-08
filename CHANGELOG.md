@@ -54,6 +54,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   self-or-admin authorization check now applies to that case too, matching the
   trust decision it's guarding
   ([#16](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/16))
+- `register` now sets `IAdminProvisionableUser.HasSetPassword` to `true` after a
+  successful `CreateAsync`, matching what `resetpassword` already does — a
+  self-registered user chose their own password at signup, but nothing recorded that,
+  so a consumer reading `HasSetPassword` (e.g. an admin dashboard) saw `false` forever
+  for anyone who never happened to reset their password afterward
+  ([#18](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/18))
 
 ### Known limitations
 - 2FA code expiry isn't independently configurable yet — tracked as

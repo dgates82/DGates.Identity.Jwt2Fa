@@ -68,6 +68,22 @@ public class AuthCoreServiceTests
     }
 
     [Fact]
+    public async Task RegisterAsync_WithSucceedingCreate_SetsHasSetPassword()
+    {
+        TestUser? createdUser = null;
+        _userManager.Setup(x => x.CreateAsync(It.IsAny<TestUser>(), Password))
+            .Callback<TestUser, string>((user, _) => createdUser = user)
+            .ReturnsAsync(IdentityResult.Success);
+        _userManager.Setup(x => x.GenerateEmailConfirmationTokenAsync(It.IsAny<TestUser>())).ReturnsAsync("raw-code");
+        var service = CreateService();
+
+        await service.RegisterAsync(new RegisterRequestDto { Email = Email, Password = Password });
+
+        Assert.True(createdUser!.HasSetPassword);
+        _userManager.Verify(x => x.UpdateAsync(createdUser), Times.Once);
+    }
+
+    [Fact]
     public async Task RegisterAsync_WithFailingCreate_ReturnsBadRequestAndSendsNoEmail()
     {
         var errors = new[] { new IdentityError { Code = "DuplicateEmail", Description = "Email taken." } };
