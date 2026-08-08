@@ -46,6 +46,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   400-on-invalid-input) on every controller action; neither carried over automatically
   when the port moved to minimal APIs
   ([#12](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/12))
+- `sendtwofacode` now sends Phone/SMS setup codes to the submitted phone number
+  whenever the account isn't already verified for the Phone method specifically,
+  instead of only when 2FA isn't enabled at all — switching from Email or
+  Authenticator to Phone previously sent the code to the account's stored (empty)
+  phone number and silently dropped it, so the switch could never complete. The
+  self-or-admin authorization check now applies to that case too, matching the
+  trust decision it's guarding
+  ([#16](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/16))
 
 ### Known limitations
 - 2FA code expiry isn't independently configurable yet — tracked as
