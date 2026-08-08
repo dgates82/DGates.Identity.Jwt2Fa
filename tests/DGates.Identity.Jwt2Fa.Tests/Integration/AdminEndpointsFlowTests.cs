@@ -170,7 +170,7 @@ public class AdminEndpointsFlowTests : IntegrationTestBase
         var confirmationEmail = EmailSender.SentEmails.Last(e => e.Email == newEmail);
         var confirmUserId = EmailParsingHelper.ExtractQueryParam(confirmationEmail.HtmlMessage, "userId");
         var confirmCode = EmailParsingHelper.ExtractQueryParam(confirmationEmail.HtmlMessage, "code");
-        await Client.PostAsJsonAsync("/auth/confirmEmail", new ConfirmEmailRequestDto { UserId = confirmUserId, Code = confirmCode });
+        await Client.PostAsJsonAsync("/auth/confirmemail", new ConfirmEmailRequestDto { UserId = confirmUserId, Code = confirmCode });
 
         var loginResponse = await Client.PostAsJsonAsync("/auth/login", new AuthRequestDto { Email = newEmail, Password = Password });
         var loginResult = await loginResponse.Content.ReadFromJsonAsync<AuthResponseDto>();

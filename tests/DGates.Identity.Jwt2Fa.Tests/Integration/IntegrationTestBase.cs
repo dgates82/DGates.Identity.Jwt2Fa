@@ -135,7 +135,7 @@ public abstract class IntegrationTestBase : IAsyncLifetime
         var confirmationEmail = EmailSender.SentEmails.Single(e => e.Email == email);
         var userId = EmailParsingHelper.ExtractQueryParam(confirmationEmail.HtmlMessage, "userId");
         var code = EmailParsingHelper.ExtractQueryParam(confirmationEmail.HtmlMessage, "code");
-        await Client.PostAsJsonAsync("/auth/confirmEmail", new ConfirmEmailRequestDto { UserId = userId, Code = code });
+        await Client.PostAsJsonAsync("/auth/confirmemail", new ConfirmEmailRequestDto { UserId = userId, Code = code });
 
         return await LoginAsync(email, password);
     }
