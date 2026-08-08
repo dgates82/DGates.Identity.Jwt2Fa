@@ -1,14 +1,12 @@
 # DGates.Identity.Jwt2Fa
 
+[![CI](https://github.com/dgates82/DGates.Identity.Jwt2Fa/actions/workflows/ci.yml/badge.svg)](https://github.com/dgates82/DGates.Identity.Jwt2Fa/actions/workflows/ci.yml)
+
 Real, claims-bearing JWTs and multi-channel two-factor authentication
 (Authenticator/TOTP, Email, SMS) for ASP.NET Core Identity — generic over your own
 user type.
 
 Targets **.NET 10 only** — not compatible with .NET Framework (e.g. net48).
-
-> **Status:** pre-release. The core port and its test suite are done and passing,
-> but nothing has been published to NuGet.org yet and the API surface may still move
-> before `v1.0.0`.
 
 ## Why this instead of `MapIdentityApi<TUser>`?
 
@@ -43,79 +41,39 @@ You'll also need an `IEmailSender` (`Microsoft.AspNetCore.Identity.UI.Services.I
 covers both in one package (SMTP/SendGrid/Postmark for email, Twilio/AWS SNS for SMS),
 or bring your own implementation of either interface.
 
-## Design: opt-in modules, capability interfaces instead of one big user contract
-
-Everything is generic over `TUser : IdentityUser`, but the two pieces below aren't one
-monolithic registration — each is opt-in, and each capability beyond bare `IdentityUser`
-is its own small interface your `TUser` implements only if you use the module that
-needs it. Skip a module, never see its interface. Opt into one without the matching
-interface, and it's a compile error, not a silent no-op.
-
-| Module | Registration | Requires on `TUser` | Endpoints |
-|---|---|---|---|
-| Core | `AddAuthCore<TUser>()` + `MapAuthCore<TUser>()` | nothing extra (optionally honors `IActivationPolicy<TUser>` if registered — see below) | register, login, secure, getuserbyemail, getuserbyid, listusers, admincreateuser, adminupdateuser, unlock, forgotpassword, resetpassword, changepassword, sendemailconfirmation, confirmEmail |
-| Two-factor | `Add2Fa<TUser>()` + `Map2Fa<TUser>()` | `IMultiFactorMethodUser` | login2fa, sendtwofacode, enableauthenticator, verifyauthenticator, resetauthenticator |
-
-`getuserbyid`, `listusers`, `admincreateuser`, `adminupdateuser`, and `unlock` require the
-`Jwt2FaPolicies.AdminOnly` authorization policy (`AddAuthCore` registers it, requiring the
-configured `AdminRoleName` role) rather than the self-or-admin check `getuserbyemail`
-uses — there's no "self" case for browsing all users, creating one, or editing another
-user's roles. `admincreateuser` mirrors `register`: it creates the account *and* sends the
-confirmation/first-login email in one call, generating a temporary password that's
-discarded in favor of the emailed password-reset link — callers never see or need it.
-`adminupdateuser` updates only the identity concerns this package knows about — email and
-role membership (a full-set diff against the user's current roles, not a delta) — never
-app-specific profile fields, which stay on the consuming app's own update endpoint to
-avoid mass-assignment risk. Changing the email re-sends a confirmation link to the new
-address, since Identity resets `EmailConfirmed` on any email change. `unlock` clears a
-locked-out user's lockout (`LockoutEnd` set to now) without resetting their failed-attempt
-count — requires nothing beyond `IdentityUser`, since lockout is a base Identity concept,
-not a capability interface. `listusers`' `pageSize` is clamped to
-`AuthCoreOptions.MaxPageSize` (default 100) regardless of what's requested — there's no
-"give me everyone" escape hatch. Note that role claims are baked into a JWT at login time,
-so promoting a user to the admin role — or editing their roles via `adminupdateuser` —
-doesn't retroactively grant/revoke access on a token they already hold; they need to log
-in again.
-
-Three capabilities layer on top of core as pure enhancements — none are their own
-module, and core works fine with none registered:
-
-**Optional activation gate.** `login` normally succeeds for any valid credentials. To
-make it reject inactive users too, register an `IActivationPolicy<TUser>` — the
-built-in `AddDefaultActivationPolicy<TUser>()` (requires `IActivatableUser`, a plain
-`bool IsActive`) or your own for anything more complex. `login` honors whichever
-policy is registered, or works the same with none at all. `AddDefaultActivationPolicy<TUser>()`
-also registers `IUserActivationService<TUser>`; pair it with
-`MapDefaultActivationPolicy<TUser>()` to map `activate`/`deactivate` admin endpoints
-that toggle `IsActive` directly. Both are scoped to the single-flag case specifically —
-a consumer with a custom, non-boolean `IActivationPolicy<TUser>` doesn't get these
-endpoints (the package can't know how to "activate" arbitrary logic) and should add
-their own admin action instead.
-
-**`IAdminProvisionableUser` enhances two endpoints.** If `TUser` implements it,
-`resetpassword`/`sendemailconfirmation` handle the admin-created-account first-login
-flow automatically. If not, both endpoints still work — just without that extra
-behavior.
-
-**`IRoleAwareUser` enhances the admin lookup/list endpoints.** `Jwt2FaUserProjector<TUser>`
-is synchronous and can't call `UserManager.GetRolesAsync` itself, so `getuserbyid` and
-`listusers` populate `TUser`'s `Roles` property before projecting, if `TUser` implements
-`IRoleAwareUser` — letting your projector include roles in the response without the
-package needing to know your response shape. If `TUser` doesn't implement it, both
-endpoints still work, just without roles populated.
-
-One thing worth knowing about `login2fa`: it lives in `Add2Fa`, not core, even though
-`login` (which reports a second factor is required) is core. Nothing else in the
-package can ever put a user into a 2FA-required state, so completing one is `Add2Fa`'s
-job specifically.
-
-Every `MapXyz` route group carries two endpoint filters automatically, requiring no
-setup: an unhandled exception in any endpoint is logged and turned into a generic 500
-message rather than reaching the client, and request DTOs are validated
-(`System.ComponentModel.DataAnnotations`) with a 400 `ValidationProblem` on invalid
-input rather than whatever a malformed request happens to do further down.
-
 ## Usage
+
+### Minimal setup
+
+Everything beyond bare `IdentityUser` is opt-in — this gets you register, login,
+secure, and the whole password/email lifecycle, with no custom user type at all:
+
+```csharp
+builder.Services
+    .AddIdentity<IdentityUser, IdentityRole>(options => options.SignIn.RequireConfirmedAccount = true)
+    .AddEntityFrameworkStores<YourDbContext>()
+    .AddDefaultTokenProviders();
+
+builder.Services.AddAuthCore<IdentityUser>(builder.Configuration, user => new
+{
+    user.Id,
+    user.Email
+});
+
+var app = builder.Build();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapAuthCore<IdentityUser>();
+
+app.Run();
+```
+
+### Full setup
+
+Two-factor auth, an activation gate, admin-created accounts, and role membership in
+responses each need `TUser` to implement one small interface — nothing you don't use:
 
 ```csharp
 public class AppUser : IdentityUser, IActivatableUser, IAdminProvisionableUser, IMultiFactorMethodUser, IRoleAwareUser
@@ -169,7 +127,7 @@ out of the box on your *own* app's endpoints and controllers — not just this
 package's. `Jwt2FaPolicies.AdminOnly`, which the admin endpoints use, is built the
 same way.
 
-### Configuration
+## Configuration
 
 ```json
 {
@@ -204,6 +162,70 @@ confirmation page wants the address without a lookup, leave it out of the templa
 if you don't need it.
 `MaxPageSize` (optional, defaults to 100) is the hard cap `listusers` clamps its
 `pageSize` query parameter to.
+
+## Design: modules & capabilities
+
+Everything is generic over `TUser : IdentityUser`. Each module is opt-in and each
+capability beyond bare `IdentityUser` is its own small interface — skip a module,
+never see its interface; opt into one without the matching interface, and it's a
+compile error, not a silent no-op.
+
+| Module | Registration | Requires on `TUser` | Endpoints |
+|---|---|---|---|
+| Core | `AddAuthCore<TUser>()` + `MapAuthCore<TUser>()` | nothing extra (optionally honors `IActivationPolicy<TUser>` — see below) | register, login, secure, getuserbyemail, getuserbyid, listusers, admincreateuser, adminupdateuser, unlock, forgotpassword, resetpassword, changepassword, sendemailconfirmation, confirmemail |
+| Two-factor | `Add2Fa<TUser>()` + `Map2Fa<TUser>()` | `IMultiFactorMethodUser` | login2fa, sendtwofacode, enableauthenticator, verifyauthenticator, resetauthenticator |
+
+**Admin endpoints** (`getuserbyid`, `listusers`, `admincreateuser`, `adminupdateuser`,
+`unlock`) require the `Jwt2FaPolicies.AdminOnly` policy — `AddAuthCore` registers it
+from the configured `AdminRoleName`, rather than the self-or-admin check
+`getuserbyemail` uses (there's no "self" case for browsing all users or creating one).
+Worth knowing:
+- `admincreateuser` mirrors `register` — it creates the account *and* sends the
+  confirmation/first-login email in one call. The generated temporary password is
+  discarded in favor of the emailed reset link; callers never see or need it.
+- `adminupdateuser` only touches identity concerns this package knows about — email
+  and role membership (a full-set diff against current roles, not a delta) — never
+  app-specific profile fields, which stay on your own update endpoint to avoid
+  mass-assignment risk. Changing the email re-sends a confirmation link, since
+  Identity resets `EmailConfirmed` on any email change.
+- `unlock` clears a locked-out user (`LockoutEnd` set to now) without resetting their
+  failed-attempt count — requires nothing beyond `IdentityUser`, since lockout is a
+  base Identity concept, not a capability interface.
+- `listusers`' `pageSize` is clamped to `AuthCoreOptions.MaxPageSize` (default 100)
+  regardless of what's requested — there's no "give me everyone" escape hatch.
+- Role claims are baked into a JWT at login time, so promoting a user to admin (or
+  editing roles via `adminupdateuser`) doesn't retroactively affect a token already
+  issued — they need to log in again.
+
+**Three capabilities layer on top of core as pure enhancements** — none are their own
+module, and core works fine with none registered:
+- **Optional activation gate.** Register an `IActivationPolicy<TUser>` — the built-in
+  `AddDefaultActivationPolicy<TUser>()` (requires `IActivatableUser`, a plain
+  `bool IsActive`) or your own for anything more complex — to make `login` reject
+  inactive users; `login` works the same with none registered.
+  `AddDefaultActivationPolicy<TUser>()` also registers `IUserActivationService<TUser>`;
+  pair it with `MapDefaultActivationPolicy<TUser>()` for `activate`/`deactivate` admin
+  endpoints that toggle `IsActive` directly. Both are scoped to the single-flag case —
+  a custom, non-boolean `IActivationPolicy<TUser>` doesn't get these endpoints (the
+  package can't know how to "activate" arbitrary logic) and should add its own.
+- **`IAdminProvisionableUser`** enhances two endpoints: if `TUser` implements it,
+  `resetpassword`/`sendemailconfirmation` handle the admin-created-account
+  first-login flow automatically. If not, both still work, just without it.
+- **`IRoleAwareUser`** enhances the admin lookup/list endpoints: `Jwt2FaUserProjector<TUser>`
+  is synchronous and can't call `UserManager.GetRolesAsync` itself, so `getuserbyid`/
+  `listusers` populate `TUser.Roles` before projecting, if implemented. If not, both
+  still work, just without roles populated.
+
+One thing worth knowing about `login2fa`: it lives in `Add2Fa`, not core, even though
+`login` (which reports a second factor is required) is core. Nothing else in the
+package can ever put a user into a 2FA-required state, so completing one is `Add2Fa`'s
+job specifically.
+
+Every `MapXyz` route group carries two endpoint filters automatically, requiring no
+setup: an unhandled exception in any endpoint is logged and turned into a generic 500
+message rather than reaching the client, and request DTOs are validated
+(`System.ComponentModel.DataAnnotations`) with a 400 `ValidationProblem` on invalid
+input rather than whatever a malformed request happens to do further down.
 
 ## License
 
