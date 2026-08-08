@@ -24,7 +24,9 @@ public static class AuthCoreEndpointRouteBuilderExtensions
         string prefix = "/auth")
         where TUser : IdentityUser, new()
     {
-        var group = endpoints.MapGroup(prefix);
+        var group = endpoints.MapGroup(prefix)
+            .AddEndpointFilter<ExceptionHandlingEndpointFilter>()
+            .AddEndpointFilter<ValidationEndpointFilter>();
 
         group.MapPost("/register", async (RegisterRequestDto request, IAuthCoreService<TUser> service) =>
             (await service.RegisterAsync(request)).ToIResult());

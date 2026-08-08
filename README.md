@@ -221,6 +221,12 @@ One thing worth knowing about `login2fa`: it lives in `Add2Fa`, not core, even t
 package can ever put a user into a 2FA-required state, so completing one is `Add2Fa`'s
 job specifically.
 
+Every `MapXyz` route group carries two endpoint filters automatically, requiring no
+setup: an unhandled exception in any endpoint is logged and turned into a generic 500
+message rather than reaching the client, and request DTOs are validated
+(`System.ComponentModel.DataAnnotations`) with a 400 `ValidationProblem` on invalid
+input rather than whatever a malformed request happens to do further down.
+
 ## License
 
 MIT — see [LICENSE](https://github.com/dgates82/DGates.Identity.Jwt2Fa/blob/main/LICENSE).

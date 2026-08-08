@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace DGates.Identity.Jwt2Fa.Dtos;
 
 /// <summary>
@@ -10,6 +12,7 @@ namespace DGates.Identity.Jwt2Fa.Dtos;
 public class AdminUpdateUserRequestDto
 {
     /// <summary>The user's email address, also used as the username.</summary>
+    [Required, EmailAddress]
     public required string Email { get; set; }
 
     /// <summary>

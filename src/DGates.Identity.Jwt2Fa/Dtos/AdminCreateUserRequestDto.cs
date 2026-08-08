@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace DGates.Identity.Jwt2Fa.Dtos;
 
 /// <summary>
@@ -9,6 +11,7 @@ namespace DGates.Identity.Jwt2Fa.Dtos;
 public class AdminCreateUserRequestDto
 {
     /// <summary>The new account's email address, also used as the username.</summary>
+    [Required, EmailAddress]
     public required string Email { get; set; }
 
     /// <summary>Roles to assign the new user, if any.</summary>

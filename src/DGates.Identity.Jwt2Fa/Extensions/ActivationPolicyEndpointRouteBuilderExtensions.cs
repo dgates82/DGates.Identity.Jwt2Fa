@@ -1,6 +1,7 @@
 using DGates.Identity.Jwt2Fa.Capabilities;
 using DGates.Identity.Jwt2Fa.Services;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Routing;
 
@@ -22,7 +23,9 @@ public static class ActivationPolicyEndpointRouteBuilderExtensions
         string prefix = "/auth")
         where TUser : IdentityUser, IActivatableUser
     {
-        var group = endpoints.MapGroup(prefix);
+        var group = endpoints.MapGroup(prefix)
+            .AddEndpointFilter<ExceptionHandlingEndpointFilter>()
+            .AddEndpointFilter<ValidationEndpointFilter>();
 
         group.MapPost("/activate/{id}", async (string id, IUserActivationService<TUser> service) =>
             (await service.ActivateAsync(id)).ToIResult()
