@@ -522,6 +522,29 @@ public class AuthCoreServiceTests
     }
 
     [Fact]
+    public async Task GetUserByIdAsync_WithUserNotImplementingCapability_SkipsRolePopulation()
+    {
+        var bareUserManager = IdentityMockFactory.CreateUserManagerMock<BareUser>();
+        var bareSignInManager = IdentityMockFactory.CreateSignInManagerMock(bareUserManager.Object);
+        var user = new BareUser { Id = "1", Email = Email };
+        bareUserManager.Setup(x => x.FindByIdAsync("1")).ReturnsAsync(user);
+        var service = new AuthCoreService<BareUser>(
+            bareUserManager.Object,
+            bareSignInManager.Object,
+            Mock.Of<IJwtTokenService<BareUser>>(),
+            u => new { u.Id },
+            _emailSender.Object,
+            _authCoreOptions,
+            _jwtOptions);
+
+        var result = await service.GetUserByIdAsync("1");
+
+        Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
+        Assert.NotNull(result.Value);
+        bareUserManager.Verify(x => x.GetRolesAsync(It.IsAny<BareUser>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ListUsersAsync_ReturnsPagedResultsWithRolesPopulated()
     {
         var userA = new TestUser { Id = "1", Email = "a@example.com" };
@@ -538,6 +561,31 @@ public class AuthCoreServiceTests
         Assert.Equal(2, result.Value.Items.Count);
         Assert.Equal(new[] { "Admin" }, userA.Roles);
         Assert.Empty(userB.Roles);
+    }
+
+    [Fact]
+    public async Task ListUsersAsync_WithUserNotImplementingCapability_SkipsRolePopulation()
+    {
+        var bareUserManager = IdentityMockFactory.CreateUserManagerMock<BareUser>();
+        var bareSignInManager = IdentityMockFactory.CreateSignInManagerMock(bareUserManager.Object);
+        var userA = new BareUser { Id = "1", Email = "a@example.com" };
+        var userB = new BareUser { Id = "2", Email = "b@example.com" };
+        bareUserManager.Setup(x => x.Users).Returns(new[] { userA, userB }.AsQueryable());
+        var service = new AuthCoreService<BareUser>(
+            bareUserManager.Object,
+            bareSignInManager.Object,
+            Mock.Of<IJwtTokenService<BareUser>>(),
+            u => new { u.Id },
+            _emailSender.Object,
+            _authCoreOptions,
+            _jwtOptions);
+
+        var result = await service.ListUsersAsync(page: 1, pageSize: 20);
+
+        Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
+        Assert.Equal(2, result.Value!.TotalCount);
+        Assert.Equal(2, result.Value.Items.Count);
+        bareUserManager.Verify(x => x.GetRolesAsync(It.IsAny<BareUser>()), Times.Never);
     }
 
     [Fact]

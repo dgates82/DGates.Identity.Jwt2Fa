@@ -39,6 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   carried over when the URL-building moved into this package, silently breaking any
   frontend page that used the address for something (e.g. a follow-up "enable 2FA"
   link) without an extra lookup
+- Every mapped endpoint now has a baseline safety net: an unhandled exception is
+  logged and turned into a generic 500 message instead of reaching the client, and
+  request DTOs are validated with a 400 `ValidationProblem` on invalid input. The
+  source app had both (a catch-all per action, `[ApiController]`'s automatic
+  400-on-invalid-input) on every controller action; neither carried over automatically
+  when the port moved to minimal APIs
+  ([#12](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/12))
 - `sendtwofacode` now sends Phone/SMS setup codes to the submitted phone number
   whenever the account isn't already verified for the Phone method specifically,
   instead of only when 2FA isn't enabled at all — switching from Email or
