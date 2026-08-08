@@ -1,14 +1,12 @@
 # DGates.Identity.Jwt2Fa
 
+[![CI](https://github.com/dgates82/DGates.Identity.Jwt2Fa/actions/workflows/ci.yml/badge.svg)](https://github.com/dgates82/DGates.Identity.Jwt2Fa/actions/workflows/ci.yml)
+
 Real, claims-bearing JWTs and multi-channel two-factor authentication
 (Authenticator/TOTP, Email, SMS) for ASP.NET Core Identity — generic over your own
 user type.
 
 Targets **.NET 10 only** — not compatible with .NET Framework (e.g. net48).
-
-> **Status:** pre-release. The core port and its test suite are done and passing,
-> but nothing has been published to NuGet.org yet and the API surface may still move
-> before `v1.0.0`.
 
 ## Why this instead of `MapIdentityApi<TUser>`?
 
@@ -53,7 +51,7 @@ secure, and the whole password/email lifecycle, with no custom user type at all:
 ```csharp
 builder.Services
     .AddIdentity<IdentityUser, IdentityRole>(options => options.SignIn.RequireConfirmedAccount = true)
-    .AddEntityFrameworkStores<AppDbContext>()
+    .AddEntityFrameworkStores<YourDbContext>()
     .AddDefaultTokenProviders();
 
 builder.Services.AddAuthCore<IdentityUser>(builder.Configuration, user => new
