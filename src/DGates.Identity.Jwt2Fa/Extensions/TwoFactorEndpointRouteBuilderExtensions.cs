@@ -20,7 +20,9 @@ public static class TwoFactorEndpointRouteBuilderExtensions
         string prefix = "/auth")
         where TUser : IdentityUser, IMultiFactorMethodUser
     {
-        var group = endpoints.MapGroup(prefix);
+        var group = endpoints.MapGroup(prefix)
+            .AddEndpointFilter<ExceptionHandlingEndpointFilter>()
+            .AddEndpointFilter<ValidationEndpointFilter>();
 
         group.MapPost("/login2fa", async (TwoFaAuthRequestDto request, ITwoFactorService<TUser> service) =>
             (await service.LoginTwoFactorAsync(request)).ToIResult());
