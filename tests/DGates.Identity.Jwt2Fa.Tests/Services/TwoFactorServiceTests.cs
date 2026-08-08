@@ -220,6 +220,8 @@ public class TwoFactorServiceTests
     {
         var user = new TestUser { Id = "1", Email = Email, TwoFactorEnabled = true, PhoneNumber = null };
         _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.FindByIdAsync("1")).ReturnsAsync(user);
+        _userManager.Setup(x => x.IsInRoleAsync(user, "Admin")).ReturnsAsync(false);
         _userManager.Setup(x => x.GenerateTwoFactorTokenAsync(user, "Phone")).ReturnsAsync("123456");
         var service = CreateService();
 
@@ -228,6 +230,58 @@ public class TwoFactorServiceTests
             ClaimsPrincipalHelper.ForUserId("1"));
 
         Assert.False(result.Value!.IsSuccess);
+    }
+
+    [Fact]
+    public async Task SendTwoFaCodeAsync_SwitchingToPhoneFromAnotherEnrolledMethod_UsesTheSubmittedPhoneNumber()
+    {
+        var user = new TestUser { Id = "1", Email = Email, TwoFactorEnabled = true, TwoFactorMethod = "Email", PhoneNumber = null };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.FindByIdAsync("1")).ReturnsAsync(user);
+        _userManager.Setup(x => x.IsInRoleAsync(user, "Admin")).ReturnsAsync(false);
+        _userManager.Setup(x => x.GenerateTwoFactorTokenAsync(user, "Phone")).ReturnsAsync("123456");
+        var service = CreateService();
+
+        var result = await service.SendTwoFaCodeAsync(
+            new SendVerificationCodeRequestDto { Email = Email, Method = "Phone", PhoneNumber = "5551234567" },
+            ClaimsPrincipalHelper.ForUserId("1"));
+
+        Assert.True(result.Value!.IsSuccess);
+        _smsSender.Verify(x => x.SendSmsAsync("5551234567", It.Is<string>(b => b.Contains("123456")), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SendTwoFaCodeAsync_ForAlreadyVerifiedPhoneMethod_IgnoresASubmittedPhoneNumberAndUsesTheStoredOne()
+    {
+        var user = new TestUser { Id = "1", Email = Email, TwoFactorEnabled = true, TwoFactorMethod = "Phone", PhoneNumber = "5559999999" };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.GenerateTwoFactorTokenAsync(user, "Phone")).ReturnsAsync("123456");
+        var service = CreateService();
+
+        var result = await service.SendTwoFaCodeAsync(
+            new SendVerificationCodeRequestDto { Email = Email, Method = "Phone", PhoneNumber = "5550000000" },
+            ClaimsPrincipalHelper.ForUserId("someone-else"));
+
+        Assert.True(result.Value!.IsSuccess);
+        _smsSender.Verify(x => x.SendSmsAsync("5559999999", It.Is<string>(b => b.Contains("123456")), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SendTwoFaCodeAsync_SwitchingToPhoneFromAnotherEnrolledMethod_WhenNeitherSelfNorAdmin_ReturnsBadRequest()
+    {
+        var user = new TestUser { Id = "1", Email = Email, TwoFactorEnabled = true, TwoFactorMethod = "Email", PhoneNumber = null };
+        var otherUser = new TestUser { Id = "other-1" };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.FindByIdAsync("other-1")).ReturnsAsync(otherUser);
+        _userManager.Setup(x => x.IsInRoleAsync(otherUser, "Admin")).ReturnsAsync(false);
+        var service = CreateService();
+
+        var result = await service.SendTwoFaCodeAsync(
+            new SendVerificationCodeRequestDto { Email = Email, Method = "Phone", PhoneNumber = "5551234567" },
+            ClaimsPrincipalHelper.ForUserId("other-1"));
+
+        Assert.Equal(Jwt2FaResultKind.BadRequest, result.Kind);
+        _smsSender.Verify(x => x.SendSmsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

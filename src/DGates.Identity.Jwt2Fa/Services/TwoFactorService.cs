@@ -89,8 +89,18 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
             return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = false });
         }
 
-        // Only the not-yet-enrolled case trusts request.PhoneNumber as the delivery target, so only it needs auth.
-        if (!user.TwoFactorEnabled)
+        var tokenProvider = TwoFactorProviderNames.Resolve(request.Method);
+        if (string.IsNullOrEmpty(tokenProvider))
+        {
+            return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = false });
+        }
+
+        // A Phone send trusts request.PhoneNumber as the delivery target whenever the
+        // account isn't already verified for Phone specifically - a fresh enrollment and
+        // a switch from another already-enabled method both introduce an unverified
+        // number, so both need the same self-or-admin check.
+        var isUnverifiedPhoneTarget = tokenProvider == "Phone" && user.TwoFactorMethod != "Phone";
+        if (!user.TwoFactorEnabled || isUnverifiedPhoneTarget)
         {
             var authFailure = await CheckSelfOrAdminAsync<ResponseDto>(user, caller,
                 "You can only send a 2FA setup code to your own account. Doing this for another account requires the admin role.");
@@ -98,12 +108,6 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
             {
                 return authFailure.Value;
             }
-        }
-
-        var tokenProvider = TwoFactorProviderNames.Resolve(request.Method);
-        if (string.IsNullOrEmpty(tokenProvider))
-        {
-            return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = false });
         }
 
         var code = await _userManager.GenerateTwoFactorTokenAsync(user, tokenProvider);
@@ -122,7 +126,7 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
                     $"Your 2FA code is: {code}<br/><br/>If you did not request a 2FA code please ignore this email.");
                 break;
             case "Phone":
-                var phoneNumber = user.TwoFactorEnabled ? user.PhoneNumber : request.PhoneNumber;
+                var phoneNumber = user.TwoFactorMethod == "Phone" ? user.PhoneNumber : request.PhoneNumber;
                 if (string.IsNullOrEmpty(phoneNumber))
                 {
                     return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = false });
