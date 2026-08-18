@@ -228,7 +228,7 @@ public class AuthCoreServiceTests
     [Fact]
     public async Task ForgotPasswordAsync_WithConfirmedEmail_SendsResetEmail()
     {
-        var user = new TestUser { Id = "1", Email = Email };
+        var user = new TestUser { Id = "1", Email = Email, HasSetPassword = true };
         _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
         _userManager.Setup(x => x.IsEmailConfirmedAsync(user)).ReturnsAsync(true);
         _userManager.Setup(x => x.GeneratePasswordResetTokenAsync(user)).ReturnsAsync("raw-code");
@@ -238,6 +238,36 @@ public class AuthCoreServiceTests
 
         Assert.True(result.Value!.IsSuccess);
         _emailSender.Verify(x => x.SendEmailAsync(Email, It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ForgotPasswordAsync_ForUserWhoNeverSetAPassword_AppendsIsFirstLogin()
+    {
+        var user = new TestUser { Id = "1", Email = Email, HasSetPassword = false };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.IsEmailConfirmedAsync(user)).ReturnsAsync(true);
+        _userManager.Setup(x => x.GeneratePasswordResetTokenAsync(user)).ReturnsAsync("raw-code");
+        var service = CreateService();
+
+        await service.ForgotPasswordAsync(new ForgotPasswordDto { Email = Email });
+
+        _emailSender.Verify(x => x.SendEmailAsync(
+            Email, It.IsAny<string>(), It.Is<string>(body => body.Contains("isFirstLogin=true"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task ForgotPasswordAsync_ForUserWhoAlreadySetAPassword_DoesNotAppendIsFirstLogin()
+    {
+        var user = new TestUser { Id = "1", Email = Email, HasSetPassword = true };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.IsEmailConfirmedAsync(user)).ReturnsAsync(true);
+        _userManager.Setup(x => x.GeneratePasswordResetTokenAsync(user)).ReturnsAsync("raw-code");
+        var service = CreateService();
+
+        await service.ForgotPasswordAsync(new ForgotPasswordDto { Email = Email });
+
+        _emailSender.Verify(x => x.SendEmailAsync(
+            Email, It.IsAny<string>(), It.Is<string>(body => !body.Contains("isFirstLogin"))), Times.Once);
     }
 
     [Fact]
