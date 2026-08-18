@@ -62,6 +62,14 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
             return Jwt2FaResult<ResponseDto>.BadRequest(result.Errors);
         }
 
+        // Self-registration means the account holder set this password themselves,
+        // unlike AdminCreateUserAsync's discarded temporary one.
+        if (user is IAdminProvisionableUser provisionable)
+        {
+            provisionable.HasSetPassword = true;
+            await _userManager.UpdateAsync(user);
+        }
+
         var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
         code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
 
