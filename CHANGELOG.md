@@ -60,6 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a consumer reading `HasSetPassword` (e.g. an admin dashboard) saw `false` forever
   for anyone who never happened to reset their password afterward
   ([#18](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/18))
+- `forgotpassword` now appends `&isFirstLogin=true` to its reset link for an account
+  that's never set its own password (`IAdminProvisionableUser.HasSetPassword == false`),
+  matching the framing `admincreateuser`'s own first-login email already carries — lets
+  a consumer reissue a working first-login link for an admin-created account whose
+  original one went stale, without losing that context
 
 ### Known limitations
 - 2FA code expiry isn't independently configurable yet — tracked as

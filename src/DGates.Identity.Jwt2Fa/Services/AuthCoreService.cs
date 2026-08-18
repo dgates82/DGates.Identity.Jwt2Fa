@@ -152,6 +152,13 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
         var appName = _authCoreOptions.Value.ApplicationName;
         var callbackUrl = BuildUrl(_authCoreOptions.Value.ForgotPasswordPath, ("code", code));
 
+        // Lets a consumer reissue a working first-login link for an admin-created
+        // account whose original one went stale, without losing the first-login framing.
+        if (user is IAdminProvisionableUser { HasSetPassword: false })
+        {
+            callbackUrl += "&isFirstLogin=true";
+        }
+
         await _emailSender.SendEmailAsync(
             request.Email,
             $"{appName} Password Reset",
