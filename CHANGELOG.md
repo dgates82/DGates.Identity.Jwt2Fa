@@ -65,6 +65,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   matching the framing `admincreateuser`'s own first-login email already carries — lets
   a consumer reissue a working first-login link for an admin-created account whose
   original one went stale, without losing that context
+- `forgotpassword` now sends the same account-setup email `admincreateuser` sends when
+  reissuing a first-login link (`IAdminProvisionableUser.HasSetPassword == false`),
+  instead of its own "forgot your password" wording with just the link patched — the
+  link's `isFirstLogin=true` correctly framed the destination page, but the email
+  itself still told the recipient "we received a request to reset your password...
+  if you did not request this, ignore it," which is backwards when an admin is
+  reissuing the link on their behalf
+  ([#22](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/22))
 
 ### Known limitations
 - 2FA code expiry isn't independently configurable yet — tracked as
