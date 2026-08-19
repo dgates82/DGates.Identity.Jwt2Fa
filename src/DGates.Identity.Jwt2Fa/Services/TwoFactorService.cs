@@ -122,8 +122,8 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
                 // No stated expiry — Identity's built-in Email/Phone providers use a fixed, unreadable internal window.
                 await _emailSender.SendEmailAsync(
                     request.Email,
-                    $"{appName} 2FA Code",
-                    $"Your 2FA code is: {code}<br/><br/>If you did not request a 2FA code please ignore this email.");
+                    MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.TwoFactorCodeEmailSubject, ("applicationName", appName)),
+                    MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.TwoFactorCodeEmailBody, ("code", code)));
                 break;
             case "Phone":
                 var phoneNumber = user.TwoFactorMethod == "Phone" ? user.PhoneNumber : request.PhoneNumber;
@@ -133,7 +133,8 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
                 }
                 await _smsSender.SendSmsAsync(
                     phoneNumber,
-                    $"Your 2FA code for {appName} is: {code}. DO NOT share it with anyone.");
+                    MessageTemplateFormatter.FormatPlainText(_authCoreOptions.Value.TwoFactorCodeSmsBody,
+                        ("applicationName", appName), ("code", code)));
                 break;
         }
 

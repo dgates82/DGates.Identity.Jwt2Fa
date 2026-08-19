@@ -77,12 +77,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
         var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
             ("userId", user.Id), ("code", code), ("email", request.Email));
 
-        await _emailSender.SendEmailAsync(
-            request.Email,
-            $"{appName} Email Confirmation",
-            $"In order to start using {appName}, you need to verify your email.<br/><br/>" +
-            $"Please confirm your account by <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>clicking here</a>.<br/><br/>" +
-            $"If you did not request a login to {appName}, please ignore this email.");
+        await SendEmailConfirmationEmailAsync(request.Email, appName, callbackUrl);
 
         return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = true });
     }
@@ -162,10 +157,9 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
 
         await _emailSender.SendEmailAsync(
             request.Email,
-            $"{appName} Password Reset",
-            $"Forgot your password?<br/>We received a request to reset the password for your account.<br/><br/>" +
-            $"To reset your password <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>click here</a>.<br/><br/>" +
-            $"If you did not request a password reset please ignore this email.");
+            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.ForgotPasswordEmailSubject, ("applicationName", appName)),
+            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.ForgotPasswordEmailBody,
+                ("applicationName", appName), ("link", callbackUrl)));
 
         return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = true });
     }
@@ -244,12 +238,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
             callbackUrl += $"&passwordResetCode={Uri.EscapeDataString(passwordResetCode)}&isFirstLogin=true";
         }
 
-        await _emailSender.SendEmailAsync(
-            request.Email,
-            $"{appName} Email Confirmation",
-            $"In order to start using {appName}, you need to verify your email.<br/><br/>" +
-            $"Please confirm your account by <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>clicking here</a>.<br/><br/>" +
-            $"If you did not request a login to {appName}, please ignore this email.");
+        await SendEmailConfirmationEmailAsync(request.Email, appName, callbackUrl);
 
         return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = true });
     }
@@ -476,10 +465,23 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
     {
         return _emailSender.SendEmailAsync(
             email,
-            $"{appName} Account Created",
-            $"An account has been created for you on {appName}.<br/><br/>" +
-            $"Please confirm your account and set your password by <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>clicking here</a>.<br/><br/>" +
-            $"If you were not expecting this, please ignore this email.");
+            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.AccountSetupEmailSubject, ("applicationName", appName)),
+            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.AccountSetupEmailBody,
+                ("applicationName", appName), ("link", callbackUrl)));
+    }
+
+    /// <summary>
+    /// The email-confirmation email sent both by a fresh self-registration and by a
+    /// consumer-triggered resend — identical content either way, kept as a single call
+    /// site so the two stay in sync.
+    /// </summary>
+    private Task SendEmailConfirmationEmailAsync(string email, string appName, string callbackUrl)
+    {
+        return _emailSender.SendEmailAsync(
+            email,
+            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.EmailConfirmationEmailSubject, ("applicationName", appName)),
+            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.EmailConfirmationEmailBody,
+                ("applicationName", appName), ("link", callbackUrl)));
     }
 
     private async Task PopulateRolesIfAwareAsync(TUser user)
