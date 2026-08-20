@@ -53,8 +53,8 @@ public abstract class IntegrationTestBase : IAsyncLifetime
                 ["Jwt2FaConfig:AdminRoleName"] = "Admin",
                 ["Jwt2FaAuthCoreConfig:ApplicationName"] = "Test App",
                 ["Jwt2FaAuthCoreConfig:FrontendBaseUrl"] = "https://app.example.com",
-                ["Jwt2FaAuthCoreConfig:EmailConfirmationPath"] = "/email-confirmation?userId={userId}&email={email}&code={code}",
-                ["Jwt2FaAuthCoreConfig:ForgotPasswordPath"] = "/forgot-password/reset?code={code}"
+                ["Jwt2FaAuthCoreConfig:EmailConfirmationPath"] = "/email-confirmation?userId={userId}&code={code}",
+                ["Jwt2FaAuthCoreConfig:ForgotPasswordPath"] = "/forgot-password/reset?userId={userId}&code={code}"
             })
             .Build();
 

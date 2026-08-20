@@ -24,8 +24,6 @@ public class RegisterLoginFlowTests : IntegrationTestBase
         var confirmationEmail = Assert.Single(EmailSender.SentEmails);
         var userId = EmailParsingHelper.ExtractQueryParam(confirmationEmail.HtmlMessage, "userId");
         var code = EmailParsingHelper.ExtractQueryParam(confirmationEmail.HtmlMessage, "code");
-        var emailParam = EmailParsingHelper.ExtractQueryParam(confirmationEmail.HtmlMessage, "email");
-        Assert.Equal(Email, emailParam);
 
         var confirmResponse = await Client.PostAsJsonAsync("/auth/confirmemail", new ConfirmEmailRequestDto
         {

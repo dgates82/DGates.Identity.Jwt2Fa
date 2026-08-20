@@ -75,7 +75,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
 
         var appName = _authCoreOptions.Value.ApplicationName;
         var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
-            ("userId", user.Id), ("code", code), ("email", request.Email));
+            ("userId", user.Id), ("code", code));
 
         await SendEmailConfirmationEmailAsync(request.Email, appName, callbackUrl);
 
@@ -145,7 +145,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
         code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
 
         var appName = _authCoreOptions.Value.ApplicationName;
-        var callbackUrl = BuildUrl(_authCoreOptions.Value.ForgotPasswordPath, ("code", code));
+        var callbackUrl = BuildUrl(_authCoreOptions.Value.ForgotPasswordPath, ("code", code), ("userId", user.Id));
 
         // Reissues admincreateuser's account-setup email, not this method's own "forgot password" wording.
         if (user is IAdminProvisionableUser { HasSetPassword: false })
@@ -167,7 +167,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
     /// <inheritdoc />
     public async Task<Jwt2FaResult<ResponseDto>> ResetPasswordAsync(ResetPasswordRequestDto request)
     {
-        var user = await _userManager.FindByEmailAsync(request.Email);
+        var user = await _userManager.FindByIdAsync(request.UserId);
         if (user is null)
         {
             // Don't reveal that the user does not exist.
@@ -226,7 +226,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
 
         var appName = _authCoreOptions.Value.ApplicationName;
         var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
-            ("userId", user.Id), ("code", emailCode), ("email", request.Email));
+            ("userId", user.Id), ("code", emailCode));
 
         // Admin-created accounts haven't set their own password yet — bundle a
         // password reset code into the same link so first login can set one. Only
@@ -354,7 +354,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
 
         var appName = _authCoreOptions.Value.ApplicationName;
         var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
-            ("userId", user.Id), ("code", emailCode), ("email", request.Email));
+            ("userId", user.Id), ("code", emailCode));
 
         if (user is IAdminProvisionableUser { HasSetPassword: false })
         {
@@ -401,7 +401,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
 
             var appName = _authCoreOptions.Value.ApplicationName;
             var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
-                ("userId", user.Id), ("code", emailCode), ("email", request.Email));
+                ("userId", user.Id), ("code", emailCode));
 
             await _emailSender.SendEmailAsync(
                 request.Email,

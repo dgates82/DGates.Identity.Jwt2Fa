@@ -141,8 +141,8 @@ same way.
   "Jwt2FaAuthCoreConfig": {
     "ApplicationName": "Your App",
     "FrontendBaseUrl": "https://your-app.example.com",
-    "EmailConfirmationPath": "/email-confirmation?userId={userId}&email={email}&code={code}",
-    "ForgotPasswordPath": "/forgot-password/reset?code={code}",
+    "EmailConfirmationPath": "/email-confirmation?userId={userId}&code={code}",
+    "ForgotPasswordPath": "/forgot-password/reset?userId={userId}&code={code}",
     "MaxPageSize": 100,
     "EmailConfirmationEmailSubject": "{applicationName} Email Confirmation",
     "EmailConfirmationEmailBody": "In order to start using {applicationName}, you need to verify your email.<br/><br/>Please confirm your account by <a href='{link}'>clicking here</a>.<br/><br/>If you did not request a login to {applicationName}, please ignore this email.",
@@ -163,12 +163,11 @@ admin-only endpoints require — defaults to `"Admin"`, override if your app nam
 differently. `FrontendBaseUrl`
 (no trailing slash) is combined with the two path templates to build the links
 emailed to users — only the domain is configured once; the paths (and their
-`{userId}`/`{email}`/`{code}` tokens) can point at whatever routes your frontend
-actually uses. `{email}` is substituted the same way everywhere
-`EmailConfirmationPath` is used (register, admincreateuser, sendemailconfirmation,
-and adminupdateuser's re-confirmation-on-email-change) — include it if your
-confirmation page wants the address without a lookup, leave it out of the template
-if you don't need it.
+`{userId}`/`{code}` tokens) can point at whatever routes your frontend actually uses.
+Both templates identify the account by `{userId}`, not email — `resetpassword` looks
+the user up by id, so your reset/setup page never needs to display, collect, or
+transmit an email address; the reset code is already cryptographically bound to a
+specific user.
 `MaxPageSize` (optional, defaults to 100) is the hard cap `listusers` clamps its
 `pageSize` query parameter to.
 

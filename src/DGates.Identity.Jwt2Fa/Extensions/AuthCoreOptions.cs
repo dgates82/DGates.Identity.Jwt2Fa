@@ -23,24 +23,23 @@ public class AuthCoreOptions
 
     /// <summary>
     /// The path (plus query string) of the consuming app's email-confirmation page,
-    /// appended to <see cref="FrontendBaseUrl"/>, with <c>{userId}</c>, <c>{code}</c>,
-    /// and <c>{email}</c> placeholder tokens substituted before emailing it — e.g.
-    /// <c>"/email-confirmation?userId={userId}&amp;email={email}&amp;code={code}"</c>.
-    /// <c>{email}</c> is substituted consistently everywhere this template is used
-    /// (register, admincreateuser, sendemailconfirmation, and adminupdateuser's
-    /// re-confirmation-on-email-change), so your confirmation page can use the address
-    /// without an extra lookup; leave the token out of the template if you don't need
-    /// it, it's simply never substituted. Deliberately just a template, not a fixed
-    /// route this package assumes — the source template's hardcoded
-    /// <c>/email-confirmation</c> same-origin route assumed a single-process API+SPA
-    /// deployment, which this replaces.
+    /// appended to <see cref="FrontendBaseUrl"/>, with <c>{userId}</c> and <c>{code}</c>
+    /// placeholder tokens substituted before emailing it — e.g.
+    /// <c>"/email-confirmation?userId={userId}&amp;code={code}"</c>. Deliberately just
+    /// a template, not a fixed route this package assumes — the source template's
+    /// hardcoded <c>/email-confirmation</c> same-origin route assumed a single-process
+    /// API+SPA deployment, which this replaces.
     /// </summary>
     public required string EmailConfirmationPath { get; set; }
 
     /// <summary>
     /// The path (plus query string) of the consuming app's password-reset page,
-    /// appended to <see cref="FrontendBaseUrl"/>, with a <c>{code}</c> placeholder token
-    /// substituted before emailing it — e.g. <c>"/forgot-password/reset?code={code}"</c>.
+    /// appended to <see cref="FrontendBaseUrl"/>, with <c>{userId}</c> and <c>{code}</c>
+    /// placeholder tokens substituted before emailing it — e.g.
+    /// <c>"/forgot-password/reset?userId={userId}&amp;code={code}"</c>. <c>{userId}</c>
+    /// is how <c>resetpassword</c> identifies the account, not a submitted email
+    /// address — the reset code is already cryptographically bound to a specific
+    /// user, so your reset-password page needs nothing more than the new password.
     /// </summary>
     public required string ForgotPasswordPath { get; set; }
 

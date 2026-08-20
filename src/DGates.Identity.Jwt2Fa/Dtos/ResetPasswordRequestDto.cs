@@ -5,9 +5,9 @@ namespace DGates.Identity.Jwt2Fa.Dtos;
 /// <summary>Request for the reset-password endpoint.</summary>
 public class ResetPasswordRequestDto
 {
-    /// <summary>The email address of the account resetting its password.</summary>
-    [Required, EmailAddress]
-    public required string Email { get; set; }
+    /// <summary>The id of the account resetting its password, carried on the reset link.</summary>
+    [Required]
+    public required string UserId { get; set; }
 
     /// <summary>The new password to set.</summary>
     [Required]

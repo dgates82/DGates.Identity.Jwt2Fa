@@ -28,7 +28,7 @@ public class TwoFactorServiceTests
         ApplicationName = "Test App",
         FrontendBaseUrl = "https://app.example.com",
         EmailConfirmationPath = "/email-confirmation?userId={userId}&code={code}",
-        ForgotPasswordPath = "/forgot-password/reset?code={code}"
+        ForgotPasswordPath = "/forgot-password/reset?userId={userId}&code={code}"
     });
     private readonly IOptions<JwtOptions> _jwtOptions = Options.Create(new JwtOptions
     {
@@ -189,7 +189,7 @@ public class TwoFactorServiceTests
             ApplicationName = "Test App",
             FrontendBaseUrl = "https://app.example.com",
             EmailConfirmationPath = "/email-confirmation?userId={userId}&code={code}",
-            ForgotPasswordPath = "/forgot-password/reset?code={code}",
+            ForgotPasswordPath = "/forgot-password/reset?userId={userId}&code={code}",
             TwoFactorCodeEmailSubject = "Custom subject for {applicationName}",
             TwoFactorCodeEmailBody = "Custom body, code: {code}",
             TwoFactorCodeSmsBody = "Custom SMS from {applicationName}, code: {code}"
