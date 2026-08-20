@@ -64,9 +64,7 @@ public class ForgotPasswordFlowTests : IntegrationTestBase
             AuthorizedRequest(HttpMethod.Post, "/auth/admincreateuser", adminToken),
             new AdminCreateUserRequestDto { Email = newUserEmail }));
 
-        // Confirm the email (as the new hire would, clicking the welcome email's link),
-        // but abandon it there without setting a password - the "stuck" state a reissued
-        // forgotpassword link exists for.
+        // Confirm the email, then abandon it without setting a password - the "stuck" state a reissued forgotpassword link exists for.
         var welcomeEmail = EmailSender.SentEmails.Single(e => e.Email == newUserEmail);
         var userId = EmailParsingHelper.ExtractQueryParam(welcomeEmail.HtmlMessage, "userId");
         var confirmCode = EmailParsingHelper.ExtractQueryParam(welcomeEmail.HtmlMessage, "code");
