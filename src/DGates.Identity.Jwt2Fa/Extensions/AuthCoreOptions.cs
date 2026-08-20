@@ -82,7 +82,7 @@ public class AuthCoreOptions
 
     /// <summary>Body for <c>forgotpassword</c>'s reset link, for an account that has already set its own password. Supports <c>{applicationName}</c> and <c>{link}</c>.</summary>
     public string ForgotPasswordEmailBody { get; set; } =
-        "Forgot your password?<br/>We received a request to reset the password for your account.<br/><br/>" +
+        "Forgot your password?<br/><br/>We received a request to reset the password for your account.<br/><br/>" +
         "To reset your password <a href='{link}'>click here</a>.<br/><br/>" +
         "If you did not request a password reset please ignore this email.";
 

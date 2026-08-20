@@ -81,6 +81,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   matching the framing `admincreateuser`'s own first-login email already carries — lets
   a consumer reissue a working first-login link for an admin-created account whose
   original one went stale, without losing that context
+- `ForgotPasswordEmailBody`'s default wording had a single `<br/>` between its
+  first two lines while every other line break in it (and in the other five
+  default templates) used `<br/><br/>` for paragraph spacing, so the opening
+  line rendered as a cramped run-on against the paragraph beneath it
 - `forgotpassword` now sends the same account-setup email `admincreateuser` sends when
   reissuing a first-login link (`IAdminProvisionableUser.HasSetPassword == false`),
   instead of its own "forgot your password" wording with just the link patched — the
