@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Jwt2FaResult<T>` — lets the service layer signal an HTTP outcome without depending on
   ASP.NET Core's `IResult`, so every service is usable outside this package's own
   endpoint-mapping layer too
+- Every email/SMS this package sends now has a consumer-overridable subject/body on
+  `AuthCoreOptions` — email confirmation, account setup/first-login, forgot password,
+  and both 2FA code channels (Email/SMS) — each a plain `{token}`-substituted string
+  defaulting to the package's existing wording, so a consumer wanting different
+  copy no longer has to fork the package to get it
+  ([#23](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/23))
 
 ### Fixed
 - `login`, `login2fa`, and `getuserbyemail` now populate `IRoleAwareUser.Roles` before

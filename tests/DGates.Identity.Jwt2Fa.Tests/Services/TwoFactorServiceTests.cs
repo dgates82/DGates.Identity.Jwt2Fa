@@ -182,6 +182,46 @@ public class TwoFactorServiceTests
     }
 
     [Fact]
+    public async Task SendTwoFaCodeAsync_WithCustomEmailAndSmsTemplates_UsesTheOverrides()
+    {
+        var customOptions = Options.Create(new AuthCoreOptions
+        {
+            ApplicationName = "Test App",
+            FrontendBaseUrl = "https://app.example.com",
+            EmailConfirmationPath = "/email-confirmation?userId={userId}&code={code}",
+            ForgotPasswordPath = "/forgot-password/reset?code={code}",
+            TwoFactorCodeEmailSubject = "Custom subject for {applicationName}",
+            TwoFactorCodeEmailBody = "Custom body, code: {code}",
+            TwoFactorCodeSmsBody = "Custom SMS from {applicationName}, code: {code}"
+        });
+        var service = new TwoFactorService<TestUser>(
+            _userManager.Object, _signInManager.Object, _jwtTokenService.Object, user => new { user.Id },
+            _emailSender.Object, _smsSender.Object, customOptions, _jwtOptions);
+
+        var emailUser = new TestUser { Id = "1", Email = Email, TwoFactorEnabled = true };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(emailUser);
+        _userManager.Setup(x => x.GenerateTwoFactorTokenAsync(emailUser, "Email")).ReturnsAsync("123456");
+
+        await service.SendTwoFaCodeAsync(
+            new SendVerificationCodeRequestDto { Email = Email, Method = "Email" },
+            ClaimsPrincipalHelper.ForUserId("someone-else"));
+
+        _emailSender.Verify(x => x.SendEmailAsync(
+            Email, "Custom subject for Test App", "Custom body, code: 123456"), Times.Once);
+
+        var phoneUser = new TestUser { Id = "2", Email = Email, TwoFactorEnabled = true, TwoFactorMethod = "Phone", PhoneNumber = "5551234567" };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(phoneUser);
+        _userManager.Setup(x => x.GenerateTwoFactorTokenAsync(phoneUser, "Phone")).ReturnsAsync("654321");
+
+        await service.SendTwoFaCodeAsync(
+            new SendVerificationCodeRequestDto { Email = Email, Method = "Sms" },
+            ClaimsPrincipalHelper.ForUserId("someone-else"));
+
+        _smsSender.Verify(x => x.SendSmsAsync(
+            "5551234567", "Custom SMS from Test App, code: 654321", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task SendTwoFaCodeAsync_ForUnenrolledUser_RequiresSelfOrAdmin()
     {
         var user = new TestUser { Id = "1", Email = Email, TwoFactorEnabled = false };

@@ -143,7 +143,16 @@ same way.
     "FrontendBaseUrl": "https://your-app.example.com",
     "EmailConfirmationPath": "/email-confirmation?userId={userId}&email={email}&code={code}",
     "ForgotPasswordPath": "/forgot-password/reset?code={code}",
-    "MaxPageSize": 100
+    "MaxPageSize": 100,
+    "EmailConfirmationEmailSubject": "{applicationName} Email Confirmation",
+    "EmailConfirmationEmailBody": "In order to start using {applicationName}, you need to verify your email.<br/><br/>Please confirm your account by <a href='{link}'>clicking here</a>.<br/><br/>If you did not request a login to {applicationName}, please ignore this email.",
+    "AccountSetupEmailSubject": "{applicationName} Account Created",
+    "AccountSetupEmailBody": "An account has been created for you on {applicationName}.<br/><br/>Please confirm your account and set your password by <a href='{link}'>clicking here</a>.<br/><br/>If you were not expecting this, please ignore this email.",
+    "ForgotPasswordEmailSubject": "{applicationName} Password Reset",
+    "ForgotPasswordEmailBody": "Forgot your password?<br/>We received a request to reset the password for your account.<br/><br/>To reset your password <a href='{link}'>click here</a>.<br/><br/>If you did not request a password reset please ignore this email.",
+    "TwoFactorCodeEmailSubject": "{applicationName} 2FA Code",
+    "TwoFactorCodeEmailBody": "Your 2FA code is: {code}<br/><br/>If you did not request a 2FA code please ignore this email.",
+    "TwoFactorCodeSmsBody": "Your 2FA code for {applicationName} is: {code}. DO NOT share it with anyone."
   }
 }
 ```
@@ -162,6 +171,17 @@ confirmation page wants the address without a lookup, leave it out of the templa
 if you don't need it.
 `MaxPageSize` (optional, defaults to 100) is the hard cap `listusers` clamps its
 `pageSize` query parameter to.
+
+Every email/SMS this package sends has an overridable subject/body too — the six
+`*Subject`/`*Body` properties above, all optional and already defaulted to the wording
+shown (so leaving them out changes nothing). Each is a plain string with its own set of
+`{token}` placeholders, substituted the same way `EmailConfirmationPath`/
+`ForgotPasswordPath` are — `{applicationName}` and `{link}` on the email
+subjects/bodies, `{code}` on the 2FA ones. Override just the ones you need; no
+templating engine, no conditionals inside a single string — `AccountSetupEmailBody` is
+sent both by `admincreateuser` and by `forgotpassword` reissuing a first-login link
+(see below), so retext it once to cover both. `adminupdateuser`'s distinct
+email-changed notice isn't independently configurable yet.
 
 ## Design: modules & capabilities
 
@@ -183,6 +203,11 @@ Worth knowing:
 - `admincreateuser` mirrors `register` — it creates the account *and* sends the
   confirmation/first-login email in one call. The generated temporary password is
   discarded in favor of the emailed reset link; callers never see or need it.
+- `forgotpassword`, for an account that's confirmed its email but never set its own
+  password (an `IAdminProvisionableUser` still at `HasSetPassword: false`), reissues
+  that same first-login email rather than a generic password-reset one — lets you
+  build a "resend setup link" action for an admin-created account whose original
+  link went stale, without a separate endpoint.
 - `adminupdateuser` only touches identity concerns this package knows about — email
   and role membership (a full-set diff against current roles, not a delta) — never
   app-specific profile fields, which stay on your own update endpoint to avoid

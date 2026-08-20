@@ -287,6 +287,45 @@ public class AuthCoreServiceTests
     }
 
     [Fact]
+    public async Task ForgotPasswordAsync_WithCustomTemplates_UsesTheOverrideMatchingEachBranch()
+    {
+        var customOptions = Options.Create(new AuthCoreOptions
+        {
+            ApplicationName = "Test App",
+            FrontendBaseUrl = "https://app.example.com",
+            EmailConfirmationPath = "/email-confirmation?userId={userId}&code={code}",
+            ForgotPasswordPath = "/forgot-password/reset?code={code}",
+            ForgotPasswordEmailSubject = "Custom reset subject for {applicationName}",
+            ForgotPasswordEmailBody = "Custom reset body, link: {link}",
+            AccountSetupEmailSubject = "Custom setup subject for {applicationName}",
+            AccountSetupEmailBody = "Custom setup body, link: {link}"
+        });
+        var service = new AuthCoreService<TestUser>(
+            _userManager.Object, _signInManager.Object, _jwtTokenService.Object, user => new { user.Id },
+            _emailSender.Object, customOptions, _jwtOptions);
+
+        var alreadySetUser = new TestUser { Id = "1", Email = Email, HasSetPassword = true };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(alreadySetUser);
+        _userManager.Setup(x => x.IsEmailConfirmedAsync(alreadySetUser)).ReturnsAsync(true);
+        _userManager.Setup(x => x.GeneratePasswordResetTokenAsync(alreadySetUser)).ReturnsAsync("raw-code");
+
+        await service.ForgotPasswordAsync(new ForgotPasswordDto { Email = Email });
+
+        _emailSender.Verify(x => x.SendEmailAsync(
+            Email, "Custom reset subject for Test App", It.Is<string>(b => b.StartsWith("Custom reset body, link:"))), Times.Once);
+
+        var neverSetUser = new TestUser { Id = "2", Email = Email, HasSetPassword = false };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(neverSetUser);
+        _userManager.Setup(x => x.IsEmailConfirmedAsync(neverSetUser)).ReturnsAsync(true);
+        _userManager.Setup(x => x.GeneratePasswordResetTokenAsync(neverSetUser)).ReturnsAsync("raw-code");
+
+        await service.ForgotPasswordAsync(new ForgotPasswordDto { Email = Email });
+
+        _emailSender.Verify(x => x.SendEmailAsync(
+            Email, "Custom setup subject for Test App", It.Is<string>(b => b.StartsWith("Custom setup body, link:"))), Times.Once);
+    }
+
+    [Fact]
     public async Task ResetPasswordAsync_OnSuccess_SetsHasSetPasswordTrue()
     {
         var user = new TestUser { Id = "1", Email = Email, HasSetPassword = false };
