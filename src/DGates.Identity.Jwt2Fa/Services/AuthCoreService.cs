@@ -152,11 +152,12 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
         var appName = _authCoreOptions.Value.ApplicationName;
         var callbackUrl = BuildUrl(_authCoreOptions.Value.ForgotPasswordPath, ("code", code));
 
-        // Lets a consumer reissue a working first-login link for an admin-created
-        // account whose original one went stale, without losing the first-login framing.
+        // Reissues admincreateuser's account-setup email, not this method's own "forgot password" wording.
         if (user is IAdminProvisionableUser { HasSetPassword: false })
         {
             callbackUrl += "&isFirstLogin=true";
+            await SendAccountSetupEmailAsync(request.Email, appName, callbackUrl);
+            return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = true });
         }
 
         await _emailSender.SendEmailAsync(
@@ -373,12 +374,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
             callbackUrl += $"&passwordResetCode={Uri.EscapeDataString(passwordResetCode)}&isFirstLogin=true";
         }
 
-        await _emailSender.SendEmailAsync(
-            request.Email,
-            $"{appName} Account Created",
-            $"An account has been created for you on {appName}.<br/><br/>" +
-            $"Please confirm your account and set your password by <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>clicking here</a>.<br/><br/>" +
-            $"If you were not expecting this, please ignore this email.");
+        await SendAccountSetupEmailAsync(request.Email, appName, callbackUrl);
 
         await PopulateRolesIfAwareAsync(user);
 
@@ -469,6 +465,21 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
             IsSuccess = result.Succeeded,
             Message = result.Succeeded ? null : string.Join(" ", result.Errors.Select(e => e.Description))
         });
+    }
+
+    /// <summary>
+    /// The account-setup email sent both when an admin first creates an account and when
+    /// ForgotPasswordAsync reissues a first-login link for one that's never set its own
+    /// password — kept as a single call site so the two stay in sync.
+    /// </summary>
+    private Task SendAccountSetupEmailAsync(string email, string appName, string callbackUrl)
+    {
+        return _emailSender.SendEmailAsync(
+            email,
+            $"{appName} Account Created",
+            $"An account has been created for you on {appName}.<br/><br/>" +
+            $"Please confirm your account and set your password by <a href='{HtmlEncoder.Default.Encode(callbackUrl)}'>clicking here</a>.<br/><br/>" +
+            $"If you were not expecting this, please ignore this email.");
     }
 
     private async Task PopulateRolesIfAwareAsync(TUser user)
