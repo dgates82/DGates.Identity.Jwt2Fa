@@ -32,6 +32,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   copy no longer has to fork the package to get it
   ([#23](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/23))
 
+### Changed
+- **Breaking:** `ResetPasswordRequestDto.Email` is now `UserId` - `resetpassword`
+  identifies the account by id, not email. `ForgotPasswordPath` gains a `{userId}`
+  token (mirroring `EmailConfirmationPath`'s existing one); `EmailConfirmationPath`'s
+  `{email}` token is removed, since its only purpose was pre-filling a reset-password
+  form's email field, which no longer exists - the reset code is already
+  cryptographically bound to a specific user, so a consuming reset/setup page never
+  needs to display, collect, or transmit an email address at all
+  ([#26](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/26))
+
 ### Fixed
 - `login`, `login2fa`, and `getuserbyemail` now populate `IRoleAwareUser.Roles` before
   projecting the response, matching `getuserbyid`/`listusers`/`admincreateuser` — role

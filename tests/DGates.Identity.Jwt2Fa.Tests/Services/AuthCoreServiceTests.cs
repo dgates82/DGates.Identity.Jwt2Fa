@@ -28,7 +28,7 @@ public class AuthCoreServiceTests
         ApplicationName = "Test App",
         FrontendBaseUrl = "https://app.example.com",
         EmailConfirmationPath = "/email-confirmation?userId={userId}&code={code}",
-        ForgotPasswordPath = "/forgot-password/reset?code={code}"
+        ForgotPasswordPath = "/forgot-password/reset?userId={userId}&code={code}"
     });
     private readonly IOptions<JwtOptions> _jwtOptions = Options.Create(new JwtOptions
     {
@@ -294,7 +294,7 @@ public class AuthCoreServiceTests
             ApplicationName = "Test App",
             FrontendBaseUrl = "https://app.example.com",
             EmailConfirmationPath = "/email-confirmation?userId={userId}&code={code}",
-            ForgotPasswordPath = "/forgot-password/reset?code={code}",
+            ForgotPasswordPath = "/forgot-password/reset?userId={userId}&code={code}",
             ForgotPasswordEmailSubject = "Custom reset subject for {applicationName}",
             ForgotPasswordEmailBody = "Custom reset body, link: {link}",
             AccountSetupEmailSubject = "Custom setup subject for {applicationName}",
@@ -326,10 +326,27 @@ public class AuthCoreServiceTests
     }
 
     [Fact]
+    public async Task ResetPasswordAsync_WithUnknownUserId_ReturnsOkWithoutRevealingNonExistence()
+    {
+        _userManager.Setup(x => x.FindByIdAsync("nonexistent")).ReturnsAsync((TestUser?)null);
+        var service = CreateService();
+
+        var result = await service.ResetPasswordAsync(new ResetPasswordRequestDto
+        {
+            UserId = "nonexistent",
+            Password = "NewP@ss1",
+            Code = Base64UrlEncode("code")
+        });
+
+        Assert.False(result.Value!.IsSuccess);
+        _userManager.Verify(x => x.ResetPasswordAsync(It.IsAny<TestUser>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ResetPasswordAsync_OnSuccess_SetsHasSetPasswordTrue()
     {
         var user = new TestUser { Id = "1", Email = Email, HasSetPassword = false };
-        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.FindByIdAsync(user.Id)).ReturnsAsync(user);
         _userManager
             .Setup(x => x.ResetPasswordAsync(user, It.IsAny<string>(), "NewP@ss1"))
             .ReturnsAsync(IdentityResult.Success);
@@ -337,7 +354,7 @@ public class AuthCoreServiceTests
 
         var result = await service.ResetPasswordAsync(new ResetPasswordRequestDto
         {
-            Email = Email,
+            UserId = user.Id,
             Password = "NewP@ss1",
             Code = Base64UrlEncode("code")
         });
@@ -351,7 +368,7 @@ public class AuthCoreServiceTests
     public async Task ResetPasswordAsync_OnFailure_DoesNotSetHasSetPassword()
     {
         var user = new TestUser { Id = "1", Email = Email, HasSetPassword = false };
-        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.FindByIdAsync(user.Id)).ReturnsAsync(user);
         _userManager
             .Setup(x => x.ResetPasswordAsync(user, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(IdentityResult.Failed(new IdentityError { Description = "Weak password." }));
@@ -359,7 +376,7 @@ public class AuthCoreServiceTests
 
         var result = await service.ResetPasswordAsync(new ResetPasswordRequestDto
         {
-            Email = Email,
+            UserId = user.Id,
             Password = "weak",
             Code = Base64UrlEncode("code")
         });
@@ -375,7 +392,7 @@ public class AuthCoreServiceTests
         var bareUserManager = IdentityMockFactory.CreateUserManagerMock<BareUser>();
         var bareSignInManager = IdentityMockFactory.CreateSignInManagerMock(bareUserManager.Object);
         var user = new BareUser { Id = "1", Email = Email };
-        bareUserManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        bareUserManager.Setup(x => x.FindByIdAsync(user.Id)).ReturnsAsync(user);
         bareUserManager
             .Setup(x => x.ResetPasswordAsync(user, It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(IdentityResult.Success);
@@ -390,7 +407,7 @@ public class AuthCoreServiceTests
 
         var result = await service.ResetPasswordAsync(new ResetPasswordRequestDto
         {
-            Email = Email,
+            UserId = user.Id,
             Password = "NewP@ss1",
             Code = Base64UrlEncode("code")
         });
@@ -740,7 +757,7 @@ public class AuthCoreServiceTests
             ApplicationName = "Test App",
             FrontendBaseUrl = "https://app.example.com",
             EmailConfirmationPath = "/email-confirmation?userId={userId}&code={code}",
-            ForgotPasswordPath = "/forgot-password/reset?code={code}",
+            ForgotPasswordPath = "/forgot-password/reset?userId={userId}&code={code}",
             MaxPageSize = 3
         });
         var service = new AuthCoreService<TestUser>(

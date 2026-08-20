@@ -20,10 +20,11 @@ public class ForgotPasswordFlowTests : IntegrationTestBase
 
         var resetEmail = EmailSender.SentEmails.Last(e => e.Email == Email);
         var resetCode = EmailParsingHelper.ExtractQueryParam(resetEmail.HtmlMessage, "code");
+        var resetUserId = EmailParsingHelper.ExtractQueryParam(resetEmail.HtmlMessage, "userId");
 
         var resetResponse = await Client.PostAsJsonAsync("/auth/resetpassword", new ResetPasswordRequestDto
         {
-            Email = Email,
+            UserId = resetUserId,
             Password = NewPassword,
             Code = resetCode
         });
@@ -82,9 +83,10 @@ public class ForgotPasswordFlowTests : IntegrationTestBase
 
         // And the reissued link's code is a genuinely working reset token, not just correctly worded.
         var resetCode = EmailParsingHelper.ExtractQueryParam(resentEmail.HtmlMessage, "code");
+        var resetUserId = EmailParsingHelper.ExtractQueryParam(resentEmail.HtmlMessage, "userId");
         var resetResponse = await Client.PostAsJsonAsync("/auth/resetpassword", new ResetPasswordRequestDto
         {
-            Email = newUserEmail,
+            UserId = resetUserId,
             Password = "N3wP@ssw0rd",
             Code = resetCode
         });
