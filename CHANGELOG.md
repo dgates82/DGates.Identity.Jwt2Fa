@@ -22,8 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also usable directly on your own app's endpoints via `[Authorize(Roles = "YourRole")]`
 - `Jwt2FaUserProjector<TUser>` — controls what's embedded in the JWT and returned from
   auth responses, so nothing sensitive on `TUser` leaks by default
-- `Jwt2FaResult<T>` — lets the service layer signal an HTTP outcome without depending on
-  ASP.NET Core's `IResult`, so every service is usable outside this package's own
+- `Jwt2FaResult<T>` — moves business logic out of endpoint delegates and into
+  injectable services that signal an HTTP outcome without depending on ASP.NET Core's
+  `IResult`, so every service is usable (and testable) outside this package's own
   endpoint-mapping layer too
 - Every email/SMS this package sends now has a consumer-overridable subject/body on
   `AuthCoreOptions` — email confirmation, account setup/first-login, forgot password,
@@ -42,19 +43,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   needs to display, collect, or transmit an email address at all
   ([#26](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/26))
 
+### Security
+- `sendtwofacode` now sends Phone/SMS setup codes to the submitted phone number
+  whenever the account isn't already verified for the Phone method specifically,
+  instead of only when 2FA isn't enabled at all — switching from Email or
+  Authenticator to Phone previously sent the code to the account's stored (empty)
+  phone number and silently dropped it, so the switch could never complete. The
+  self-or-admin authorization check now applies to that case too, matching the trust
+  decision it's guarding. This check was fixed once already in the source app
+  (an unauthenticated 2FA-takeover issue), and the port to this package dropped it
+  again for this one branch, so it's called out separately from routine fixes below
+  ([#16](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/16))
+
 ### Fixed
 - `login`, `login2fa`, and `getuserbyemail` now populate `IRoleAwareUser.Roles` before
   projecting the response, matching `getuserbyid`/`listusers`/`admincreateuser` — role
   claims in the issued JWT were always correct, but a consumer reading roles off the
   embedded `user` object (rather than decoding the JWT) previously saw an empty list on
   these three endpoints ([#7](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/7))
-- `EmailConfirmationPath` now supports an `{email}` token, substituted consistently on
-  `register`, `admincreateuser`, `sendemailconfirmation`, and `adminupdateuser`'s
-  re-confirmation-on-email-change — previously only the source app's own `register`
-  action included the email address in its confirmation link, and that behavior wasn't
-  carried over when the URL-building moved into this package, silently breaking any
-  frontend page that used the address for something (e.g. a follow-up "enable 2FA"
-  link) without an extra lookup
 - Every mapped endpoint now has a baseline safety net: an unhandled exception is
   logged and turned into a generic 500 message instead of reaching the client, and
   request DTOs are validated with a 400 `ValidationProblem` on invalid input. The
@@ -62,14 +68,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   400-on-invalid-input) on every controller action; neither carried over automatically
   when the port moved to minimal APIs
   ([#12](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/12))
-- `sendtwofacode` now sends Phone/SMS setup codes to the submitted phone number
-  whenever the account isn't already verified for the Phone method specifically,
-  instead of only when 2FA isn't enabled at all — switching from Email or
-  Authenticator to Phone previously sent the code to the account's stored (empty)
-  phone number and silently dropped it, so the switch could never complete. The
-  self-or-admin authorization check now applies to that case too, matching the
-  trust decision it's guarding
-  ([#16](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/16))
 - `register` now sets `IAdminProvisionableUser.HasSetPassword` to `true` after a
   successful `CreateAsync`, matching what `resetpassword` already does — a
   self-registered user chose their own password at signup, but nothing recorded that,
@@ -97,6 +95,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Known limitations
 - 2FA code expiry isn't independently configurable yet — tracked as
   [#1](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/1)
+- `adminupdateuser`'s email-changed notice isn't independently configurable yet
+  (it reuses no dedicated `*Subject`/`*Body` pair)
 
 <!--
 ## [X.Y.Z] - YYYY-MM-DD
