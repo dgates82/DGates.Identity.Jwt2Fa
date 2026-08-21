@@ -42,8 +42,11 @@ public static class AuthCoreEndpointRouteBuilderExtensions
         group.MapPost("/resetpassword", async (ResetPasswordRequestDto request, IAuthCoreService<TUser> service) =>
             (await service.ResetPasswordAsync(request)).ToIResult());
 
-        group.MapPost("/changepassword", async (ChangePasswordRequestDto request, IAuthCoreService<TUser> service) =>
-            (await service.ChangePasswordAsync(request)).ToIResult())
+        group.MapPost("/changepassword", async (
+            ChangePasswordRequestDto request,
+            HttpContext httpContext,
+            IAuthCoreService<TUser> service) =>
+            (await service.ChangePasswordAsync(request, httpContext.User)).ToIResult())
             .RequireAuthorization();
 
         group.MapPost("/sendemailconfirmation", async (SendEmailConfirmationRequestDto request, IAuthCoreService<TUser> service) =>

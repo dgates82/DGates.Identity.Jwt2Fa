@@ -31,8 +31,11 @@ public interface IAuthCoreService<TUser>
     /// <summary>Sets a new password using the reset code emailed by <see cref="ForgotPasswordAsync"/>.</summary>
     Task<Jwt2FaResult<ResponseDto>> ResetPasswordAsync(ResetPasswordRequestDto request);
 
-    /// <summary>Changes a user's password given their current password.</summary>
-    Task<Jwt2FaResult<ResponseDto>> ChangePasswordAsync(ChangePasswordRequestDto request);
+    /// <summary>
+    /// Changes a user's password given their current password. <paramref name="caller"/>
+    /// must be the target user or hold the configured admin role.
+    /// </summary>
+    Task<Jwt2FaResult<ResponseDto>> ChangePasswordAsync(ChangePasswordRequestDto request, ClaimsPrincipal caller);
 
     /// <summary>Resends the email confirmation link for a user.</summary>
     Task<Jwt2FaResult<ResponseDto>> SendEmailConfirmationAsync(SendEmailConfirmationRequestDto request);

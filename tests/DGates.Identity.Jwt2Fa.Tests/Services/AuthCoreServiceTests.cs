@@ -417,10 +417,12 @@ public class AuthCoreServiceTests
     }
 
     [Fact]
-    public async Task ChangePasswordAsync_OnSuccess_RefreshesSignIn()
+    public async Task ChangePasswordAsync_WhenCallerIsSelf_RefreshesSignIn()
     {
-        var user = new TestUser { Id = "1", Email = Email };
+        var user = new TestUser { Id = "user-1", Email = Email };
         _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(user);
+        _userManager.Setup(x => x.FindByIdAsync("user-1")).ReturnsAsync(user);
+        _userManager.Setup(x => x.IsInRoleAsync(user, "Admin")).ReturnsAsync(false);
         _userManager
             .Setup(x => x.ChangePasswordAsync(user, "old", "new"))
             .ReturnsAsync(IdentityResult.Success);
@@ -432,10 +434,55 @@ public class AuthCoreServiceTests
             Email = Email,
             CurrentPassword = "old",
             NewPassword = "new"
-        });
+        }, ClaimsPrincipalHelper.ForUserId("user-1"));
 
         Assert.True(result.Value!.IsSuccess);
         _signInManager.Verify(x => x.RefreshSignInAsync(user), Times.Once);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_WhenCallerIsAdmin_Succeeds()
+    {
+        var target = new TestUser { Id = "user-1", Email = Email };
+        var admin = new TestUser { Id = "admin-1", Email = "admin@example.com" };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(target);
+        _userManager.Setup(x => x.FindByIdAsync("admin-1")).ReturnsAsync(admin);
+        _userManager.Setup(x => x.IsInRoleAsync(admin, "Admin")).ReturnsAsync(true);
+        _userManager
+            .Setup(x => x.ChangePasswordAsync(target, "old", "new"))
+            .ReturnsAsync(IdentityResult.Success);
+        _signInManager.Setup(x => x.RefreshSignInAsync(target)).Returns(Task.CompletedTask);
+        var service = CreateService();
+
+        var result = await service.ChangePasswordAsync(new ChangePasswordRequestDto
+        {
+            Email = Email,
+            CurrentPassword = "old",
+            NewPassword = "new"
+        }, ClaimsPrincipalHelper.ForUserId("admin-1"));
+
+        Assert.True(result.Value!.IsSuccess);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_WhenCallerIsNeitherSelfNorAdmin_ReturnsBadRequest()
+    {
+        var target = new TestUser { Id = "user-1", Email = Email };
+        var otherUser = new TestUser { Id = "other-1", Email = "other@example.com" };
+        _userManager.Setup(x => x.FindByEmailAsync(Email)).ReturnsAsync(target);
+        _userManager.Setup(x => x.FindByIdAsync("other-1")).ReturnsAsync(otherUser);
+        _userManager.Setup(x => x.IsInRoleAsync(otherUser, "Admin")).ReturnsAsync(false);
+        var service = CreateService();
+
+        var result = await service.ChangePasswordAsync(new ChangePasswordRequestDto
+        {
+            Email = Email,
+            CurrentPassword = "old",
+            NewPassword = "new"
+        }, ClaimsPrincipalHelper.ForUserId("other-1"));
+
+        Assert.Equal(Jwt2FaResultKind.BadRequest, result.Kind);
+        _userManager.Verify(x => x.ChangePasswordAsync(target, It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Fact]

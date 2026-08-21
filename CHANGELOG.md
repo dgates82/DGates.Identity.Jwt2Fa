@@ -54,6 +54,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (an unauthenticated 2FA-takeover issue), and the port to this package dropped it
   again for this one branch, so it's called out separately from routine fixes below
   ([#16](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/16))
+- `changepassword` now requires the caller to be the target account or hold the
+  configured admin role, matching every other identity-mutating endpoint
+  (`getuserbyemail`, `sendtwofacode`, `enableauthenticator`, `verifyauthenticator`,
+  `resetauthenticator`) — previously any authenticated user could change a different
+  account's password given that account's current password, since the endpoint only
+  required *some* valid JWT rather than the target's own
+  ([#32](https://github.com/dgates82/DGates.Identity.Jwt2Fa/issues/32))
 
 ### Fixed
 - `login`, `login2fa`, and `getuserbyemail` now populate `IRoleAwareUser.Roles` before
