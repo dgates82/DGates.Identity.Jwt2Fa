@@ -191,13 +191,24 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
     }
 
     /// <inheritdoc />
-    public async Task<Jwt2FaResult<ResponseDto>> ChangePasswordAsync(ChangePasswordRequestDto request)
+    public async Task<Jwt2FaResult<ResponseDto>> ChangePasswordAsync(ChangePasswordRequestDto request, ClaimsPrincipal caller)
     {
         var user = await _userManager.FindByEmailAsync(request.Email);
         if (user is null)
         {
             // Don't reveal that the user does not exist.
             return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = false });
+        }
+
+        var currentUser = await _userManager.GetUserAsync(caller);
+        var isSelf = currentUser is not null && currentUser.Id == user.Id;
+        var isAdmin = currentUser is not null
+            && await _userManager.IsInRoleAsync(currentUser, _jwtOptions.Value.AdminRoleName);
+
+        if (!isSelf && !isAdmin)
+        {
+            return Jwt2FaResult<ResponseDto>.BadRequest(
+                "You can only change your own password. Changing another account's password requires the admin role.");
         }
 
         var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
