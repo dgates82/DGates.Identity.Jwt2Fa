@@ -40,7 +40,7 @@ jobs:
           mkdir -p ./.sonar/scanner
           dotnet tool update dotnet-sonarscanner --tool-path ./.sonar/scanner
       - name: Begin SonarQube Cloud analysis
-        run: ./.sonar/scanner/dotnet-sonarscanner begin /k:"dgates_identity-jwt2fa" /o:"dgates" /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+        run: ./.sonar/scanner/dotnet-sonarscanner begin /k:"dgates_identity-jwt2fa" /o:"dgates" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.qualitygate.wait=true
       - name: Restore
         run: dotnet restore
       - name: Build
@@ -48,7 +48,7 @@ jobs:
       - name: Tests
         run: dotnet test --configuration Release --no-build
       - name: End SonarQube Cloud analysis
-        run: ./.sonar/scanner/dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.qualitygate.wait=true
+        run: ./.sonar/scanner/dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
   pack:
     needs: build-and-test
     runs-on: ubuntu-latest
