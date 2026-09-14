@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- SonarQube Cloud static analysis, wired into CI's `build-and-test` job via
+  `dotnet-sonarscanner` and gated on the quality gate result — a failing gate now fails
+  the build. Results are posted directly to the PR (status checks and a summary comment),
+  and a quality gate badge was added to the README.
+
 ## [1.0.0] - 2026-08-22
 
 ### Added
