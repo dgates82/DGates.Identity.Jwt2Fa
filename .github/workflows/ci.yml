@@ -48,7 +48,7 @@ jobs:
       - name: Tests
         run: dotnet test --configuration Release --no-build
       - name: End SonarQube Cloud analysis
-        run: ./.sonar/scanner/dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+        run: ./.sonar/scanner/dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.qualitygate.wait=true
   pack:
     needs: build-and-test
     runs-on: ubuntu-latest
