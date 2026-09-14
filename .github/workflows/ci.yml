@@ -48,7 +48,22 @@ jobs:
       - name: Tests
         run: dotnet test --configuration Release --no-build
       - name: End SonarQube Cloud analysis
+        id: sonar-end
         run: ./.sonar/scanner/dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+      - name: Surface quality gate result
+        if: always()
+        run: |
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            DASHBOARD_URL="https://sonarcloud.io/dashboard?id=dgates_identity-jwt2fa&pullRequest=${{ github.event.pull_request.number }}"
+          else
+            DASHBOARD_URL="https://sonarcloud.io/dashboard?id=dgates_identity-jwt2fa&branch=${{ github.ref_name }}"
+          fi
+          if [ "${{ steps.sonar-end.outcome }}" = "failure" ]; then
+            echo "### :x: SonarQube Cloud quality gate FAILED" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### :white_check_mark: SonarQube Cloud quality gate passed" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "[View details on SonarQube Cloud]($DASHBOARD_URL)" >> "$GITHUB_STEP_SUMMARY"
   pack:
     needs: build-and-test
     runs-on: ubuntu-latest
