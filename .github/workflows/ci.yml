@@ -39,14 +39,23 @@ jobs:
         run: |
           mkdir -p ./.sonar/scanner
           dotnet tool update dotnet-sonarscanner --tool-path ./.sonar/scanner
+      # workflow_dispatch runs don't get branch auto-detected by the scanner (a known
+      # SonarScanner limitation) and silently analyze as if there's no branch at all -
+      # pass it explicitly for any non-PR trigger. PR runs already auto-detect correctly
+      # via sonar.pullrequest.*, so leave those alone.
       - name: Begin SonarQube Cloud analysis
-        run: ./.sonar/scanner/dotnet-sonarscanner begin /k:"dgates_identity-jwt2fa" /o:"dgates" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.qualitygate.wait=true
+        run: |
+          BRANCH_ARGS=""
+          if [ -z "${{ github.event.pull_request.number }}" ]; then
+            BRANCH_ARGS="/d:sonar.branch.name=${{ github.ref_name }}"
+          fi
+          ./.sonar/scanner/dotnet-sonarscanner begin /k:"${{ vars.SONAR_PROJECT_KEY }}" /o:"${{ vars.SONAR_ORG }}" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.qualitygate.wait=true /d:sonar.cs.cobertura.reportsPaths="**/coverage.cobertura.xml" $BRANCH_ARGS
       - name: Restore
         run: dotnet restore
       - name: Build
         run: dotnet build --configuration Release --no-restore
       - name: Tests
-        run: dotnet test --configuration Release --no-build
+        run: dotnet test --configuration Release --no-build --collect:"XPlat Code Coverage"
       - name: End SonarQube Cloud analysis
         id: sonar-end
         run: ./.sonar/scanner/dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
@@ -54,9 +63,9 @@ jobs:
         if: always()
         run: |
           if [ -n "${{ github.event.pull_request.number }}" ]; then
-            DASHBOARD_URL="https://sonarcloud.io/dashboard?id=dgates_identity-jwt2fa&pullRequest=${{ github.event.pull_request.number }}"
+            DASHBOARD_URL="https://sonarcloud.io/dashboard?id=${{ vars.SONAR_PROJECT_KEY }}&pullRequest=${{ github.event.pull_request.number }}"
           else
-            DASHBOARD_URL="https://sonarcloud.io/dashboard?id=dgates_identity-jwt2fa&branch=${{ github.ref_name }}"
+            DASHBOARD_URL="https://sonarcloud.io/dashboard?id=${{ vars.SONAR_PROJECT_KEY }}&branch=${{ github.ref_name }}"
           fi
           if [ "${{ steps.sonar-end.outcome }}" = "failure" ]; then
             echo "### :x: SonarQube Cloud quality gate FAILED" >> "$GITHUB_STEP_SUMMARY"

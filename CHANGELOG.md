@@ -12,6 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `dotnet-sonarscanner` and gated on the quality gate result — a failing gate now fails
   the build. Results are posted directly to the PR (status checks and a summary comment),
   and a quality gate badge was added to the README.
+- Test coverage reporting to SonarQube Cloud via `dotnet test --collect:"XPlat Code
+  Coverage"` (coverlet.collector) fed into the scan via `sonar.cs.cobertura.reportsPaths`.
+
+### Changed
+- Project key/org moved from hardcoded literals to `SONAR_PROJECT_KEY`/`SONAR_ORG` repo
+  variables.
+
+### Fixed
+- `workflow_dispatch` runs weren't picking up the branch name (a SonarScanner limitation),
+  silently analyzing as if there were no branch at all — now passed explicitly for any
+  non-PR trigger.
 
 ## [1.0.0] - 2026-08-22
 
