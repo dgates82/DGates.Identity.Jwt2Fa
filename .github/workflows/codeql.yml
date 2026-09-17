@@ -1,0 +1,71 @@
+name: CodeQL
+
+on:
+  push:
+    branches:
+      - main
+      - release/**
+  pull_request:
+  schedule:
+    # Weekly - catches newly-disclosed vulnerability patterns in code that hasn't changed.
+    - cron: '23 3 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (csharp)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+          config-file: ./.github/codeql/codeql-config.yml
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build
+        run: |
+          dotnet restore DGates.Identity.Jwt2Fa.sln
+          dotnet build DGates.Identity.Jwt2Fa.sln --configuration Release --no-restore
+
+      - name: Perform CodeQL Analysis
+        id: codeql-analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:csharp"
+
+      # CodeQL doesn't have a "quality gate" the way Sonar does - a successful outcome
+      # here means the scan ran cleanly, not that there are zero alerts. Alert counts and
+      # detail live in the Security tab, linked below.
+      - name: Surface CodeQL analysis result
+        if: always()
+        run: |
+          DASHBOARD_URL="https://github.com/${{ github.repository }}/security/code-scanning?query=tool%3ACodeQL"
+          if [ "${{ steps.codeql-analyze.outcome }}" = "failure" ]; then
+            echo "### :x: CodeQL analysis failed to complete" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### :white_check_mark: CodeQL analysis completed" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "[View results on GitHub Security]($DASHBOARD_URL)" >> "$GITHUB_STEP_SUMMARY"
