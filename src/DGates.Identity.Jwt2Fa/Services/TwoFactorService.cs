@@ -113,32 +113,48 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
         var code = await _userManager.GenerateTwoFactorTokenAsync(user, tokenProvider);
         var appName = _authCoreOptions.Value.ApplicationName;
 
+        var sent = await TrySendTwoFaCodeAsync(tokenProvider, code, appName, request, user);
+
+        return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = sent });
+    }
+
+    /// <summary>
+    /// Sends the 2FA code via the resolved provider. Returns whether a code was actually
+    /// sent - <c>false</c> for a provider that can't send (Authenticator) or a Phone send
+    /// with no resolvable number, matching <see cref="SendTwoFaCodeAsync"/>'s prior
+    /// per-case early returns exactly.
+    /// </summary>
+    private async Task<bool> TrySendTwoFaCodeAsync(
+        string tokenProvider, string code, string appName, SendVerificationCodeRequestDto request, TUser user)
+    {
         switch (tokenProvider)
         {
             case "Authenticator":
                 // Authenticator cannot be used to send codes.
-                return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = false });
+                return false;
             case "Email":
                 // No stated expiry — Identity's built-in Email/Phone providers use a fixed, unreadable internal window.
                 await _emailSender.SendEmailAsync(
                     request.Email,
                     MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.TwoFactorCodeEmailSubject, ("applicationName", appName)),
                     MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.TwoFactorCodeEmailBody, ("code", code)));
-                break;
+                return true;
             case "Phone":
                 var phoneNumber = user.TwoFactorMethod == "Phone" ? user.PhoneNumber : request.PhoneNumber;
                 if (string.IsNullOrEmpty(phoneNumber))
                 {
-                    return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = false });
+                    return false;
                 }
                 await _smsSender.SendSmsAsync(
                     phoneNumber,
                     MessageTemplateFormatter.FormatPlainText(_authCoreOptions.Value.TwoFactorCodeSmsBody,
                         ("applicationName", appName), ("code", code)));
-                break;
+                return true;
+            default:
+                // Unreachable in practice - TwoFactorProviderNames.Resolve already validated
+                // tokenProvider above. Matches the original switch's fall-through behavior.
+                return true;
         }
-
-        return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = true });
     }
 
     /// <inheritdoc />

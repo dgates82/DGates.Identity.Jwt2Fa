@@ -56,6 +56,7 @@ public class EndpointHardeningFlowTests : IntegrationTestBase
         });
 
         response.EnsureSuccessStatusCode();
+        Assert.True(response.IsSuccessStatusCode);
     }
 
     [Fact]
