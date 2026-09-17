@@ -10,6 +10,8 @@ public class AdminEndpointsFlowTests : IntegrationTestBase
     private const string OtherEmail = "not-admin@example.com";
     private const string Password = "P@ssw0rd";
 
+    private static readonly string[] SupportRole = ["Support"];
+
     [Fact]
     public async Task AdminEndpoints_ForNonAdminCaller_ReturnForbidden()
     {
@@ -160,7 +162,7 @@ public class AdminEndpointsFlowTests : IntegrationTestBase
         const string newEmail = "renamed@example.com";
         var updateResponse = await Client.SendAsync(WithJsonBody(
             AuthorizedRequest(HttpMethod.Put, $"/auth/adminupdateuser/{otherUserId}", adminToken),
-            new AdminUpdateUserRequestDto { Email = newEmail, Roles = new[] { "Support" } }));
+            new AdminUpdateUserRequestDto { Email = newEmail, Roles = SupportRole }));
         updateResponse.EnsureSuccessStatusCode();
 
         // Changing email resets EmailConfirmed, so the endpoint re-sends a confirmation

@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace DGates.Identity.Jwt2Fa.Tests.Integration;
 
 /// <summary>Pulls codes/links back out of the HTML bodies <see cref="FakeEmailSender"/> captures.</summary>
-public static class EmailParsingHelper
+public static partial class EmailParsingHelper
 {
     public static string ExtractQueryParam(string htmlBody, string paramName)
     {
@@ -17,11 +17,14 @@ public static class EmailParsingHelper
 
     public static string ExtractTwoFaCode(string htmlBody)
     {
-        var match = Regex.Match(htmlBody, @"code is: (\d+)");
+        var match = TwoFaCodeRegex().Match(htmlBody);
         if (!match.Success)
         {
             throw new InvalidOperationException($"2FA code not found in: {htmlBody}");
         }
         return match.Groups[1].Value;
     }
+
+    [GeneratedRegex(@"code is: (\d+)")]
+    private static partial Regex TwoFaCodeRegex();
 }
