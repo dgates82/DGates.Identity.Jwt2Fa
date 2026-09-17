@@ -24,6 +24,8 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
     private readonly IOptions<AuthCoreOptions> _authCoreOptions;
     private readonly IOptions<JwtOptions> _jwtOptions;
 
+    private const string PhoneMethodName = "Phone";
+
     /// <summary>Creates the service with its user store, notification senders, and options.</summary>
     public TwoFactorService(
         UserManager<TUser> userManager,
@@ -99,7 +101,7 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
         // account isn't already verified for Phone specifically - a fresh enrollment and
         // a switch from another already-enabled method both introduce an unverified
         // number, so both need the same self-or-admin check.
-        var isUnverifiedPhoneTarget = tokenProvider == "Phone" && user.TwoFactorMethod != "Phone";
+        var isUnverifiedPhoneTarget = tokenProvider == PhoneMethodName && user.TwoFactorMethod != PhoneMethodName;
         if (!user.TwoFactorEnabled || isUnverifiedPhoneTarget)
         {
             var authFailure = await CheckSelfOrAdminAsync<ResponseDto>(user, caller,
@@ -139,8 +141,8 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
                     MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.TwoFactorCodeEmailSubject, ("applicationName", appName)),
                     MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.TwoFactorCodeEmailBody, ("code", code)));
                 return true;
-            case "Phone":
-                var phoneNumber = user.TwoFactorMethod == "Phone" ? user.PhoneNumber : request.PhoneNumber;
+            case PhoneMethodName:
+                var phoneNumber = user.TwoFactorMethod == PhoneMethodName ? user.PhoneNumber : request.PhoneNumber;
                 if (string.IsNullOrEmpty(phoneNumber))
                 {
                     return false;
@@ -220,7 +222,7 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
 
         await _userManager.SetTwoFactorEnabledAsync(user, true);
         user.TwoFactorMethod = tokenProvider;
-        if (tokenProvider == "Phone")
+        if (tokenProvider == PhoneMethodName)
         {
             user.PhoneNumber = request.PhoneNumber;
         }
