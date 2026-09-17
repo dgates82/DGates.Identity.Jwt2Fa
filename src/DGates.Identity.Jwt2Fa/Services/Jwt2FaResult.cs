@@ -31,7 +31,10 @@ public readonly struct Jwt2FaResult<T>
     /// <summary>The success (or unauthorized-but-still-has-a-body) payload.</summary>
     public T? Value { get; }
 
-    /// <summary>The error payload for <see cref="Jwt2FaResultKind.BadRequest"/>/<see cref="Jwt2FaResultKind.NotFound"/> — a message string or a validation error collection.</summary>
+    /// <summary>
+    /// The error payload for <see cref="Jwt2FaResultKind.BadRequest"/>/<see cref="Jwt2FaResultKind.NotFound"/>
+    /// — a message string or a validation error collection.
+    /// </summary>
     public object? Error { get; }
 
     private Jwt2FaResult(Jwt2FaResultKind kind, T? value, object? error)

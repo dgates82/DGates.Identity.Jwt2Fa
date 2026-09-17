@@ -19,6 +19,11 @@ public class AuthCoreServiceTests
     private const string Email = "user@example.com";
     private const string Password = "P@ssw0rd!";
 
+    private static readonly string[] AdminRole = ["Admin"];
+    private static readonly string[] SupportRole = ["Support"];
+    private static readonly string[] SupportAndAdminRoles = ["Support", "Admin"];
+    private static readonly string[] NonexistentRole = ["Nonexistent"];
+
     private readonly Mock<UserManager<TestUser>> _userManager = IdentityMockFactory.CreateUserManagerMock<TestUser>();
     private readonly Mock<SignInManager<TestUser>> _signInManager;
     private readonly Mock<IJwtTokenService<TestUser>> _jwtTokenService = new();
@@ -93,7 +98,7 @@ public class AuthCoreServiceTests
         var result = await service.RegisterAsync(new RegisterRequestDto { Email = Email, Password = Password });
 
         Assert.Equal(Jwt2FaResultKind.BadRequest, result.Kind);
-        var actualErrors = Assert.IsAssignableFrom<IEnumerable<IdentityError>>(result.Error);
+        var actualErrors = Assert.IsType<IEnumerable<IdentityError>>(result.Error, exactMatch: false);
         Assert.Equal(errors.Select(e => e.Code), actualErrors.Select(e => e.Code));
         _emailSender.Verify(x => x.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
@@ -175,7 +180,7 @@ public class AuthCoreServiceTests
 
         await service.LoginAsync(new AuthRequestDto { Email = Email, Password = Password });
 
-        Assert.Equal(new[] { "Admin" }, user.Roles);
+        Assert.Equal(AdminRole, user.Roles);
     }
 
     [Fact]
@@ -609,7 +614,7 @@ public class AuthCoreServiceTests
 
         await service.GetUserByEmailAsync(Email, ClaimsPrincipalHelper.ForUserId("user-1"));
 
-        Assert.Equal(new[] { "Admin" }, target.Roles);
+        Assert.Equal(AdminRole, target.Roles);
     }
 
     [Fact]
@@ -667,7 +672,7 @@ public class AuthCoreServiceTests
 
         Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
         Assert.NotNull(result.Value);
-        Assert.Equal(new[] { "Admin" }, user.Roles);
+        Assert.Equal(AdminRole, user.Roles);
     }
 
     [Fact]
@@ -708,7 +713,7 @@ public class AuthCoreServiceTests
         Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
         Assert.Equal(2, result.Value!.TotalCount);
         Assert.Equal(2, result.Value.Items.Count);
-        Assert.Equal(new[] { "Admin" }, userA.Roles);
+        Assert.Equal(AdminRole, userA.Roles);
         Assert.Empty(userB.Roles);
     }
 
@@ -768,7 +773,7 @@ public class AuthCoreServiceTests
         var result = await service.AdminCreateUserAsync(new AdminCreateUserRequestDto
         {
             Email = Email,
-            Roles = new[] { "Support" }
+            Roles = SupportRole
         });
 
         Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
@@ -883,7 +888,7 @@ public class AuthCoreServiceTests
         var result = await service.AdminUpdateUserAsync("1", new AdminUpdateUserRequestDto
         {
             Email = Email,
-            Roles = new[] { "Support", "Admin" }
+            Roles = SupportAndAdminRoles
         });
 
         Assert.Equal(Jwt2FaResultKind.Ok, result.Kind);
@@ -906,7 +911,7 @@ public class AuthCoreServiceTests
         var result = await service.AdminUpdateUserAsync("1", new AdminUpdateUserRequestDto
         {
             Email = Email,
-            Roles = new[] { "Nonexistent" }
+            Roles = NonexistentRole
         });
 
         Assert.Equal(Jwt2FaResultKind.BadRequest, result.Kind);

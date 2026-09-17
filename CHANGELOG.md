@@ -23,6 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `workflow_dispatch` runs weren't picking up the branch name (a SonarScanner limitation),
   silently analyzing as if there were no branch at all — now passed explicitly for any
   non-PR trigger.
+- Cleared 24 of the remaining 32 backlog SonarQube Cloud findings from issue #37: constant
+  array literals in tests hoisted to shared static fields (`CA1861`), magic numbers named
+  as constants (`S109`), two of three duplicated-string-literal groups extracted to
+  constants (`S1192` — the third, in `TwoFactorService`, is deferred to land after #38's
+  refactor of that same method to avoid touching the same lines twice), a long doc-comment
+  line wrapped (`S103`), a test regex converted to `[GeneratedRegex]` (`SYSLIB1045`),
+  authorization policy registration switched to `AddAuthorizationBuilder` (`ASP0025`), and
+  `Assert.IsAssignableFrom` replaced with `Assert.IsType(..., exactMatch: false)`
+  (`xUnit2032`). The remaining 8 (`S107` ×2 - constructor parameter count, `S2326` ×3 - see
+  below, `S1192` ×1 deferred, plus the two findings fixed in #38) are tracked separately.
 
 ## [1.0.0] - 2026-08-22
 

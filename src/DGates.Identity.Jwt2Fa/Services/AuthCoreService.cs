@@ -26,6 +26,11 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
     private readonly IOptions<JwtOptions> _jwtOptions;
     private readonly IActivationPolicy<TUser>? _activationPolicy;
 
+    private const int DefaultPageSize = 20;
+    private const int TemporaryPasswordLength = 24;
+    private const string UserIdTokenName = "userId";
+    private const string ApplicationNameTokenName = "applicationName";
+
     /// <summary>
     /// Creates the service. <paramref name="activationPolicy"/> is optional so <see cref="LoginAsync"/>
     /// honors it when a policy is registered (e.g. via <c>AddDefaultActivationPolicy</c> or your
@@ -75,7 +80,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
 
         var appName = _authCoreOptions.Value.ApplicationName;
         var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
-            ("userId", user.Id), ("code", code));
+            (UserIdTokenName, user.Id), ("code", code));
 
         await SendEmailConfirmationEmailAsync(request.Email, appName, callbackUrl);
 
@@ -145,7 +150,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
         code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
 
         var appName = _authCoreOptions.Value.ApplicationName;
-        var callbackUrl = BuildUrl(_authCoreOptions.Value.ForgotPasswordPath, ("code", code), ("userId", user.Id));
+        var callbackUrl = BuildUrl(_authCoreOptions.Value.ForgotPasswordPath, ("code", code), (UserIdTokenName, user.Id));
 
         // Reissues admincreateuser's account-setup email, not this method's own "forgot password" wording.
         if (user is IAdminProvisionableUser { HasSetPassword: false })
@@ -157,9 +162,9 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
 
         await _emailSender.SendEmailAsync(
             request.Email,
-            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.ForgotPasswordEmailSubject, ("applicationName", appName)),
+            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.ForgotPasswordEmailSubject, (ApplicationNameTokenName, appName)),
             MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.ForgotPasswordEmailBody,
-                ("applicationName", appName), ("link", callbackUrl)));
+                (ApplicationNameTokenName, appName), ("link", callbackUrl)));
 
         return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = true });
     }
@@ -237,7 +242,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
 
         var appName = _authCoreOptions.Value.ApplicationName;
         var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
-            ("userId", user.Id), ("code", emailCode));
+            (UserIdTokenName, user.Id), ("code", emailCode));
 
         // Admin-created accounts haven't set their own password yet — bundle a
         // password reset code into the same link so first login can set one. Only
@@ -313,7 +318,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
     public async Task<Jwt2FaResult<PagedResultDto<object>>> ListUsersAsync(int page, int pageSize)
     {
         page = page < 1 ? 1 : page;
-        pageSize = pageSize < 1 ? 20 : pageSize;
+        pageSize = pageSize < 1 ? DefaultPageSize : pageSize;
         pageSize = Math.Min(pageSize, _authCoreOptions.Value.MaxPageSize);
 
         // UserManager.Users is a plain IQueryable<TUser> with no async guarantee unless the
@@ -365,7 +370,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
 
         var appName = _authCoreOptions.Value.ApplicationName;
         var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
-            ("userId", user.Id), ("code", emailCode));
+            (UserIdTokenName, user.Id), ("code", emailCode));
 
         if (user is IAdminProvisionableUser { HasSetPassword: false })
         {
@@ -412,7 +417,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
 
             var appName = _authCoreOptions.Value.ApplicationName;
             var callbackUrl = BuildUrl(_authCoreOptions.Value.EmailConfirmationPath,
-                ("userId", user.Id), ("code", emailCode));
+                (UserIdTokenName, user.Id), ("code", emailCode));
 
             await _emailSender.SendEmailAsync(
                 request.Email,
@@ -476,9 +481,9 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
     {
         return _emailSender.SendEmailAsync(
             email,
-            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.AccountSetupEmailSubject, ("applicationName", appName)),
+            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.AccountSetupEmailSubject, (ApplicationNameTokenName, appName)),
             MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.AccountSetupEmailBody,
-                ("applicationName", appName), ("link", callbackUrl)));
+                (ApplicationNameTokenName, appName), ("link", callbackUrl)));
     }
 
     /// <summary>
@@ -490,9 +495,9 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
     {
         return _emailSender.SendEmailAsync(
             email,
-            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.EmailConfirmationEmailSubject, ("applicationName", appName)),
+            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.EmailConfirmationEmailSubject, (ApplicationNameTokenName, appName)),
             MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.EmailConfirmationEmailBody,
-                ("applicationName", appName), ("link", callbackUrl)));
+                (ApplicationNameTokenName, appName), ("link", callbackUrl)));
     }
 
     private async Task PopulateRolesIfAwareAsync(TUser user)
@@ -508,7 +513,7 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
         // Discarded immediately in favor of the emailed first-login reset link — just
         // needs to satisfy whatever password policy the consumer configured.
         const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*";
-        return RandomNumberGenerator.GetString(chars, 24);
+        return RandomNumberGenerator.GetString(chars, TemporaryPasswordLength);
     }
 
     private string BuildUrl(string pathTemplate, params (string Token, string Value)[] substitutions)
