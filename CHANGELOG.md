@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-17
+
 ### Added
 - SonarQube Cloud static analysis, wired into CI's `build-and-test` job via
   `dotnet-sonarscanner` and gated on the quality gate result — a failing gate now fails
@@ -46,6 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   helper — the constant-extraction above pushed them over SonarQube Cloud's duplication
   threshold, so the actual duplication was removed instead of just tolerated
   (`new_duplicated_lines_density`). Behavior-preserving only.
+- `TUser` on `IAuthCoreService<TUser>`/`ITwoFactorService<TUser>`/`IUserActivationService<TUser>`
+  marked as a SonarQube false positive (`S2326`), not fixed — it's this package's generic-user
+  extension point; no individual method needs to reference it, but implementations close over
+  `UserManager<TUser>`, so removing it would break the generic-user architecture. `S107` (×2,
+  constructor parameter count) and the deferred `S1192` (×1, `TwoFactorService`) remain open,
+  out of scope for this pass.
 
 ## [1.0.0] - 2026-08-22
 
