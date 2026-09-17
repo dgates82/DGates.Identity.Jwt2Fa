@@ -24,6 +24,8 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
     private readonly IOptions<AuthCoreOptions> _authCoreOptions;
     private readonly IOptions<JwtOptions> _jwtOptions;
 
+    private const string PhoneMethodName = "Phone";
+
     /// <summary>Creates the service with its user store, notification senders, and options.</summary>
     public TwoFactorService(
         UserManager<TUser> userManager,
@@ -99,7 +101,7 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
         // account isn't already verified for Phone specifically - a fresh enrollment and
         // a switch from another already-enabled method both introduce an unverified
         // number, so both need the same self-or-admin check.
-        var isUnverifiedPhoneTarget = tokenProvider == "Phone" && user.TwoFactorMethod != "Phone";
+        var isUnverifiedPhoneTarget = tokenProvider == PhoneMethodName && user.TwoFactorMethod != PhoneMethodName;
         if (!user.TwoFactorEnabled || isUnverifiedPhoneTarget)
         {
             var authFailure = await CheckSelfOrAdminAsync<ResponseDto>(user, caller,
@@ -113,32 +115,48 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
         var code = await _userManager.GenerateTwoFactorTokenAsync(user, tokenProvider);
         var appName = _authCoreOptions.Value.ApplicationName;
 
+        var sent = await TrySendTwoFaCodeAsync(tokenProvider, code, appName, request, user);
+
+        return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = sent });
+    }
+
+    /// <summary>
+    /// Sends the 2FA code via the resolved provider. Returns whether a code was actually
+    /// sent - <c>false</c> for a provider that can't send (Authenticator) or a Phone send
+    /// with no resolvable number, matching <see cref="SendTwoFaCodeAsync"/>'s prior
+    /// per-case early returns exactly.
+    /// </summary>
+    private async Task<bool> TrySendTwoFaCodeAsync(
+        string tokenProvider, string code, string appName, SendVerificationCodeRequestDto request, TUser user)
+    {
         switch (tokenProvider)
         {
             case "Authenticator":
                 // Authenticator cannot be used to send codes.
-                return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = false });
+                return false;
             case "Email":
                 // No stated expiry — Identity's built-in Email/Phone providers use a fixed, unreadable internal window.
                 await _emailSender.SendEmailAsync(
                     request.Email,
                     MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.TwoFactorCodeEmailSubject, ("applicationName", appName)),
                     MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.TwoFactorCodeEmailBody, ("code", code)));
-                break;
-            case "Phone":
-                var phoneNumber = user.TwoFactorMethod == "Phone" ? user.PhoneNumber : request.PhoneNumber;
+                return true;
+            case PhoneMethodName:
+                var phoneNumber = user.TwoFactorMethod == PhoneMethodName ? user.PhoneNumber : request.PhoneNumber;
                 if (string.IsNullOrEmpty(phoneNumber))
                 {
-                    return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = false });
+                    return false;
                 }
                 await _smsSender.SendSmsAsync(
                     phoneNumber,
                     MessageTemplateFormatter.FormatPlainText(_authCoreOptions.Value.TwoFactorCodeSmsBody,
                         ("applicationName", appName), ("code", code)));
-                break;
+                return true;
+            default:
+                // Unreachable in practice - TwoFactorProviderNames.Resolve already validated
+                // tokenProvider above. Matches the original switch's fall-through behavior.
+                return true;
         }
-
-        return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = true });
     }
 
     /// <inheritdoc />
@@ -204,7 +222,7 @@ public sealed class TwoFactorService<TUser> : ITwoFactorService<TUser>
 
         await _userManager.SetTwoFactorEnabledAsync(user, true);
         user.TwoFactorMethod = tokenProvider;
-        if (tokenProvider == "Phone")
+        if (tokenProvider == PhoneMethodName)
         {
             user.PhoneNumber = request.PhoneNumber;
         }

@@ -12,15 +12,17 @@ public static class AuthenticatorKeyFormatter
     private const string AuthenticatorUriFormat = "otpauth://totp/{0}:{1}?secret={2}&issuer={0}&digits=6";
 #pragma warning restore S1075
 
+    private const int GroupSize = 4;
+
     /// <summary>Splits an authenticator key into space-separated 4-character groups, lowercased for readability.</summary>
     public static string FormatKey(string unformattedKey)
     {
         var result = new StringBuilder();
         var currentPosition = 0;
-        while (currentPosition + 4 < unformattedKey.Length)
+        while (currentPosition + GroupSize < unformattedKey.Length)
         {
-            result.Append(unformattedKey.AsSpan(currentPosition, 4)).Append(' ');
-            currentPosition += 4;
+            result.Append(unformattedKey.AsSpan(currentPosition, GroupSize)).Append(' ');
+            currentPosition += GroupSize;
         }
         if (currentPosition < unformattedKey.Length)
         {

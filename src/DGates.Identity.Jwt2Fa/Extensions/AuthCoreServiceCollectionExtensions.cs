@@ -60,10 +60,8 @@ public static class AuthCoreServiceCollectionExtensions
             };
         });
 
-        services.AddAuthorization(options =>
-        {
-            options.AddPolicy(Jwt2FaPolicies.AdminOnly, policy => policy.RequireRole(jwtOptions.AdminRoleName));
-        });
+        services.AddAuthorizationBuilder()
+            .AddPolicy(Jwt2FaPolicies.AdminOnly, policy => policy.RequireRole(jwtOptions.AdminRoleName));
 
         return services;
     }
