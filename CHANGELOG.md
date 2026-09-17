@@ -39,21 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   long doc-comment line wrapped (`S103`), a test regex converted to `[GeneratedRegex]`
   (`SYSLIB1045`), authorization policy registration switched to `AddAuthorizationBuilder`
   (`ASP0025`), and `Assert.IsAssignableFrom` replaced with
-  `Assert.IsType(..., exactMatch: false)` (`xUnit2032`). The remaining 8 (`S107` ×2 -
-  constructor parameter count, `S2326` ×3 - see below, `S1192` ×1 deferred) are tracked
-  separately.
+  `Assert.IsType(..., exactMatch: false)` (`xUnit2032`).
 - `AuthCoreService`'s three near-identical email-sending call sites
   (`SendAccountSetupEmailAsync`, `SendEmailConfirmationEmailAsync`, and
   `ForgotPasswordAsync`'s inline send) extracted into a shared `SendTemplatedEmailAsync`
   helper — the constant-extraction above pushed them over SonarQube Cloud's duplication
   threshold, so the actual duplication was removed instead of just tolerated
   (`new_duplicated_lines_density`). Behavior-preserving only.
-- `TUser` on `IAuthCoreService<TUser>`/`ITwoFactorService<TUser>`/`IUserActivationService<TUser>`
-  marked as a SonarQube false positive (`S2326`), not fixed — it's this package's generic-user
-  extension point; no individual method needs to reference it, but implementations close over
-  `UserManager<TUser>`, so removing it would break the generic-user architecture. `S107` (×2,
-  constructor parameter count) and the deferred `S1192` (×1, `TwoFactorService`) remain open,
-  out of scope for this pass.
 
 ## [1.0.0] - 2026-08-22
 
