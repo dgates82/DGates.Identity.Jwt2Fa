@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/dgates82/DGates.Identity.Jwt2Fa/actions/workflows/ci.yml/badge.svg)](https://github.com/dgates82/DGates.Identity.Jwt2Fa/actions/workflows/ci.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=dgates_identity-jwt2fa&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=dgates_identity-jwt2fa)
+[![CodeQL](https://github.com/dgates82/DGates.Identity.Jwt2Fa/actions/workflows/codeql.yml/badge.svg)](https://github.com/dgates82/DGates.Identity.Jwt2Fa/actions/workflows/codeql.yml)
 
 Real, claims-bearing JWTs and multi-channel two-factor authentication
 (Authenticator/TOTP, Email, SMS) for ASP.NET Core Identity — generic over your own
