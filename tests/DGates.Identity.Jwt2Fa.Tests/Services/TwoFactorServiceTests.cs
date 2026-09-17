@@ -18,6 +18,9 @@ public class TwoFactorServiceTests
 {
     private const string Email = "user@example.com";
 
+    private static readonly string[] AdminRole = ["Admin"];
+    private static readonly string[] RecoveryCodes = ["code1", "code2"];
+
     private readonly Mock<UserManager<TestUser>> _userManager = IdentityMockFactory.CreateUserManagerMock<TestUser>();
     private readonly Mock<SignInManager<TestUser>> _signInManager;
     private readonly Mock<IJwtTokenService<TestUser>> _jwtTokenService = new();
@@ -148,7 +151,7 @@ public class TwoFactorServiceTests
             TwoFactorCode = "123456"
         });
 
-        Assert.Equal(new[] { "Admin" }, user.Roles);
+        Assert.Equal(AdminRole, user.Roles);
     }
 
     private void SetUpJwtTokenServiceToReturn(string token)
@@ -393,7 +396,7 @@ public class TwoFactorServiceTests
         _userManager.Setup(x => x.UpdateAsync(user)).ReturnsAsync(IdentityResult.Success);
         _userManager
             .Setup(x => x.GenerateNewTwoFactorRecoveryCodesAsync(user, 10))
-            .ReturnsAsync(new[] { "code1", "code2" });
+            .ReturnsAsync(RecoveryCodes);
         var service = CreateService();
 
         var result = await service.VerifyAuthenticatorAsync(
@@ -402,7 +405,7 @@ public class TwoFactorServiceTests
 
         var response = Assert.IsType<VerifyAuthenticatorResponseDto>(result.Value);
         Assert.True(response.IsVerified);
-        Assert.Equal(new[] { "code1", "code2" }, response.Codes);
+        Assert.Equal(RecoveryCodes, response.Codes);
         Assert.Equal("Authenticator", user.TwoFactorMethod);
     }
 

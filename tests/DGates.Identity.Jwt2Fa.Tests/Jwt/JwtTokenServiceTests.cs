@@ -10,6 +10,9 @@ namespace DGates.Identity.Jwt2Fa.Tests.Jwt;
 
 public class JwtTokenServiceTests
 {
+    private static readonly string[] AdminAndSupportRoles = ["Admin", "Support"];
+    private static readonly string[] AdminRole = ["Admin"];
+
     private static readonly JwtOptions Options = new()
     {
         SecurityKey = "this-is-a-sufficiently-long-test-signing-key",
@@ -39,7 +42,7 @@ public class JwtTokenServiceTests
         var service = CreateService();
         var user = new TestUser { Id = "user-1", Email = "user@example.com", UserName = "user@example.com" };
 
-        var claims = service.GetClaims(user, new[] { "Admin", "Support" });
+        var claims = service.GetClaims(user, AdminAndSupportRoles);
 
         Assert.Contains(claims, c => c.Type == ClaimTypes.NameIdentifier && c.Value == "user-1");
         Assert.Contains(claims, c => c.Type == ClaimTypes.Name && c.Value == "user@example.com");
@@ -91,7 +94,7 @@ public class JwtTokenServiceTests
     {
         var service = CreateService();
         var user = new TestUser { Id = "user-1", Email = "user@example.com" };
-        var claims = service.GetClaims(user, new[] { "Admin" });
+        var claims = service.GetClaims(user, AdminRole);
         var token = service.GenerateToken(service.GetSigningCredentials(), claims);
 
         var jwt = service.WriteToken(token);
