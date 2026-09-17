@@ -160,11 +160,8 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
             return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = true });
         }
 
-        await _emailSender.SendEmailAsync(
-            request.Email,
-            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.ForgotPasswordEmailSubject, (ApplicationNameTokenName, appName)),
-            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.ForgotPasswordEmailBody,
-                (ApplicationNameTokenName, appName), ("link", callbackUrl)));
+        await SendTemplatedEmailAsync(request.Email, _authCoreOptions.Value.ForgotPasswordEmailSubject,
+            _authCoreOptions.Value.ForgotPasswordEmailBody, appName, callbackUrl);
 
         return Jwt2FaResult<ResponseDto>.Ok(new ResponseDto { IsSuccess = true });
     }
@@ -477,27 +474,29 @@ public sealed class AuthCoreService<TUser> : IAuthCoreService<TUser>
     /// ForgotPasswordAsync reissues a first-login link for one that's never set its own
     /// password — kept as a single call site so the two stay in sync.
     /// </summary>
-    private Task SendAccountSetupEmailAsync(string email, string appName, string callbackUrl)
-    {
-        return _emailSender.SendEmailAsync(
-            email,
-            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.AccountSetupEmailSubject, (ApplicationNameTokenName, appName)),
-            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.AccountSetupEmailBody,
-                (ApplicationNameTokenName, appName), ("link", callbackUrl)));
-    }
+    private Task SendAccountSetupEmailAsync(string email, string appName, string callbackUrl) =>
+        SendTemplatedEmailAsync(email, _authCoreOptions.Value.AccountSetupEmailSubject,
+            _authCoreOptions.Value.AccountSetupEmailBody, appName, callbackUrl);
 
     /// <summary>
     /// The email-confirmation email sent both by a fresh self-registration and by a
     /// consumer-triggered resend — identical content either way, kept as a single call
     /// site so the two stay in sync.
     /// </summary>
-    private Task SendEmailConfirmationEmailAsync(string email, string appName, string callbackUrl)
+    private Task SendEmailConfirmationEmailAsync(string email, string appName, string callbackUrl) =>
+        SendTemplatedEmailAsync(email, _authCoreOptions.Value.EmailConfirmationEmailSubject,
+            _authCoreOptions.Value.EmailConfirmationEmailBody, appName, callbackUrl);
+
+    /// <summary>
+    /// Shared shape behind every consumer-overridable subject/body email this service
+    /// sends — formats both templates with the standard token set and sends the result.
+    /// </summary>
+    private Task SendTemplatedEmailAsync(string email, string subjectTemplate, string bodyTemplate, string appName, string callbackUrl)
     {
         return _emailSender.SendEmailAsync(
             email,
-            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.EmailConfirmationEmailSubject, (ApplicationNameTokenName, appName)),
-            MessageTemplateFormatter.FormatHtml(_authCoreOptions.Value.EmailConfirmationEmailBody,
-                (ApplicationNameTokenName, appName), ("link", callbackUrl)));
+            MessageTemplateFormatter.FormatHtml(subjectTemplate, (ApplicationNameTokenName, appName)),
+            MessageTemplateFormatter.FormatHtml(bodyTemplate, (ApplicationNameTokenName, appName), ("link", callbackUrl)));
     }
 
     private async Task PopulateRolesIfAwareAsync(TUser user)
