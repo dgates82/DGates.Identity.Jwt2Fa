@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   helper — the constant-extraction above pushed them over SonarQube Cloud's duplication
   threshold, so the actual duplication was removed instead of just tolerated
   (`new_duplicated_lines_density`). Behavior-preserving only.
+- `TwoFactorService`'s repeated `"Phone"` literal extracted to a `PhoneMethodName`
+  constant (`S1192`).
 
 ## [1.0.0] - 2026-08-22
 
