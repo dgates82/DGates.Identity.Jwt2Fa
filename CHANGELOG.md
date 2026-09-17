@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `workflow_dispatch` runs weren't picking up the branch name (a SonarScanner limitation),
   silently analyzing as if there were no branch at all — now passed explicitly for any
   non-PR trigger.
+- `Register_WithWellFormedRequest_IsNotRejectedByValidation` now has an explicit assertion
+  (SonarQube S2699) — it always failed correctly via `EnsureSuccessStatusCode()`, Sonar just
+  didn't recognize that as a formal assertion.
+- `TwoFactorService.SendTwoFaCodeAsync`'s per-provider send logic extracted into
+  `TrySendTwoFaCodeAsync`, bringing cyclomatic complexity under the SonarQube threshold
+  (S1541) — behavior-preserving, no logic change.
 
 ## [1.0.0] - 2026-08-22
 
