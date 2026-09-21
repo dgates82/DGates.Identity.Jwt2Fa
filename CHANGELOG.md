@@ -7,12 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-09-21
+
 ### Added
 - CodeQL static analysis (`.github/workflows/codeql.yml`), analyzing the `csharp`
   language via GitHub's Advanced Setup — run independently of SonarQube Cloud. Path
   exclusions cover `bin`/`obj`. Runs on push to `main`/`release/**`, on PRs, weekly on a
   schedule, and via `workflow_dispatch`. A CodeQL badge was added to the README alongside
   the existing CI/Sonar ones.
+
+### Changed
+- `DGates.Identity.NotificationProviders` bumped to `1.1.0`.
+- README restructured — a live-demo callout, a grouped feature list, a concrete
+  login/JWT example, and a package-ecosystem table; JWT/notification config detail,
+  the full module/capability design, and email/SMS copy customization moved to
+  `docs/CONFIGURATION.md` and `docs/DESIGN.md`.
 
 ## [1.1.0] - 2026-09-17
 
