@@ -15,9 +15,9 @@ Targets **.NET 10 only** — not compatible with .NET Framework (e.g. net48).
 ## See it running
 
 [angular-dotnet-auth-template](https://github.com/dgates82/angular-dotnet-auth-template)
-is a full Angular + .NET app built on this package, with a live demo currently
-running **v1.1.0**. Register an account and try authenticator/TOTP, email, and SMS
-2FA. No real email or SMS is sent — messages land in the public mock inboxes.
+is a full Angular + .NET app built on this package, with a live demo. Register an
+account and try authenticator/TOTP, email, and SMS 2FA. No real email or SMS is
+sent — messages land in the public mock inboxes.
 
 - [Live demo](https://angular-dotnet-auth-template-1019453023791.us-central1.run.app)
 - [SendGrid mock](https://sendgrid-mock-7qs7btajdq-uc.a.run.app) (email inbox)
@@ -63,12 +63,21 @@ dotnet add package DGates.Identity.Jwt2Fa
 
 [`DGates.Identity.NotificationProviders`](https://github.com/dgates82/DGates.Identity.NotificationProviders)
 is a real, shipped dependency — installing this package already brings it in, you
-don't add it separately. It supplies the `ISmsSender` interface and concrete senders
-(SendGrid/SMTP/Postmark for email, Twilio/AWS SNS for SMS), but none are wired up
-automatically: registration and 2FA still need an `IEmailSender`
-(`Microsoft.AspNetCore.Identity.UI.Services.IEmailSender`) and, for SMS 2FA, an
-`ISmsSender` explicitly registered — call one of `NotificationProviders`'
-`AddXyzEmailSender()`/`AddXyzSmsSender()` extensions, or bring your own.
+don't add it separately. It supplies the `ISmsSender` interface and concrete senders,
+but none are wired up automatically: registration and 2FA still need an
+`IEmailSender` (`Microsoft.AspNetCore.Identity.UI.Services.IEmailSender`) and, for
+SMS 2FA, an `ISmsSender` explicitly registered:
+
+```csharp
+builder.Services.AddSmtpEmailSender(builder.Configuration);
+// or: AddSendGridEmailSender / AddPostMarkEmailSender
+
+builder.Services.AddTwilioSmsSender(builder.Configuration);
+// or: AddSnsSmsSender
+```
+
+Register only one provider per channel — the last one registered wins for its
+interface. Or bring your own implementation of either interface instead.
 
 ## Usage
 
@@ -213,11 +222,12 @@ for `AdminRoleName`, `MaxPageSize`, and overriding email/SMS copy.
 
 ## Design: modules & capabilities
 
-Two opt-in modules (`AddAuthCore`/`MapAuthCore` and `Add2Fa`/`Map2Fa`) and four
-capability interfaces that opportunistically enhance core if your `TUser`
-implements them, with no loss of functionality if it doesn't. Skip a module, never
-see its interface; opt into one without the matching interface, and it's a compile
-error, not a silent no-op.
+Two opt-in modules (`AddAuthCore`/`MapAuthCore` and `Add2Fa`/`Map2Fa`). The 2FA
+module requires `IMultiFactorMethodUser` on your `TUser`; three other capability
+interfaces (activation gate, admin-provisioned accounts, role-aware lookups)
+optionally enhance core, with no loss of functionality if you skip them. Skip a
+module, never see its interface; opt into a module without its interface, and it's
+a compile error, not a silent no-op.
 
 See [Design](https://github.com/dgates82/DGates.Identity.Jwt2Fa/blob/main/docs/DESIGN.md)
 for the full module table, admin endpoint behavior, and the three capability
@@ -234,9 +244,8 @@ interfaces.
 
 angular-dotnet-auth-template → DGates.Identity.Jwt2Fa → DGates.Identity.NotificationProviders → dgates-mock-servers (in dev)
 
-This package pins `DGates.Identity.NotificationProviders` to a specific version
-(currently `1.1.0`), not "latest" — that pin will lag again whenever
-`NotificationProviders` releases next.
+This package depends on `DGates.Identity.NotificationProviders` `1.1.0`; reference
+a newer version directly in your own project if you want it.
 
 More from dgates82: [DGates.AwsSecretsManager](https://github.com/dgates82/DGates.AwsSecretsManager)
 and [dotnet-nuget-release-template](https://github.com/dgates82/dotnet-nuget-release-template),
