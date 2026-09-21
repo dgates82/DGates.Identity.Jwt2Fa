@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   schedule, and via `workflow_dispatch`. A CodeQL badge was added to the README alongside
   the existing CI/Sonar ones.
 
+### Changed
+- README restructured — a live-demo callout, a grouped feature list, a concrete
+  login/JWT example, and a package-ecosystem table; JWT/notification config detail,
+  the full module/capability design, and email/SMS copy customization moved to
+  `docs/CONFIGURATION.md` and `docs/DESIGN.md`.
+
 ## [1.1.0] - 2026-09-17
 
 ### Added
