@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   schedule, and via `workflow_dispatch`. A CodeQL badge was added to the README alongside
   the existing CI/Sonar ones.
 
+### Changed
+- `DGates.Identity.NotificationProviders` bumped to `1.1.0`.
+
 ## [1.1.0] - 2026-09-17
 
 ### Added
