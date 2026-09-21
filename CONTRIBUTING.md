@@ -6,8 +6,8 @@ Thanks for your interest in improving this package. A few guidelines to keep thi
 
 - For anything beyond a small fix, open an issue first to discuss the change.
 - The design (opt-in modules, capability interfaces instead of one big user
-  contract) is deliberate — see the README's ["Design"](README.md#design-opt-in-modules-capability-interfaces-instead-of-one-big-user-contract)
-  section and [angular-dotnet-auth-template#8](https://github.com/dgates82/angular-dotnet-auth-template/issues/8)
+  contract) is deliberate — see [docs/DESIGN.md](docs/DESIGN.md)
+  and [angular-dotnet-auth-template#8](https://github.com/dgates82/angular-dotnet-auth-template/issues/8)
   before proposing a new capability interface. Resist folding things back into one
   big `IAppUser` — that's the shape this design specifically avoids.
 

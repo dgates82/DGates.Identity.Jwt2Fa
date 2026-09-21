@@ -2,13 +2,38 @@
 
 [![CI](https://github.com/dgates82/DGates.Identity.Jwt2Fa/actions/workflows/ci.yml/badge.svg)](https://github.com/dgates82/DGates.Identity.Jwt2Fa/actions/workflows/ci.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=dgates_identity-jwt2fa&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=dgates_identity-jwt2fa)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=dgates_identity-jwt2fa&metric=coverage)](https://sonarcloud.io/summary/new_code?id=dgates_identity-jwt2fa)
 [![CodeQL](https://github.com/dgates82/DGates.Identity.Jwt2Fa/actions/workflows/codeql.yml/badge.svg)](https://github.com/dgates82/DGates.Identity.Jwt2Fa/actions/workflows/codeql.yml)
+[![NuGet](https://img.shields.io/nuget/v/DGates.Identity.Jwt2Fa.svg)](https://www.nuget.org/packages/DGates.Identity.Jwt2Fa)
 
 Real, claims-bearing JWTs and multi-channel two-factor authentication
 (Authenticator/TOTP, Email, SMS) for ASP.NET Core Identity — generic over your own
 user type.
 
 Targets **.NET 10 only** — not compatible with .NET Framework (e.g. net48).
+
+## See it running
+
+[angular-dotnet-auth-template](https://github.com/dgates82/angular-dotnet-auth-template)
+is a full Angular + .NET app built on this package, with a live demo. Register an
+account and try authenticator/TOTP, email, and SMS 2FA. No real email or SMS is
+sent — messages land in the public mock inboxes.
+
+- [Live demo](https://angular-dotnet-auth-template-1019453023791.us-central1.run.app)
+- [SendGrid mock](https://sendgrid-mock-7qs7btajdq-uc.a.run.app) (email inbox)
+- [Twilio mock](https://twilio-mock-1019453023791.us-central1.run.app) (SMS inbox)
+
+## What you get
+
+- Real, signed JWTs with a projected user claim and role claims — not opaque,
+  Data-Protection-encrypted tokens
+- `register`/`login`/`secure` and the full password and email-confirmation lifecycle
+- Admin user management: list, get, create, update, unlock
+- Multi-channel 2FA: authenticator app (TOTP), email codes, SMS codes
+- Generic over your own `TUser : IdentityUser`, with opt-in capability interfaces —
+  no forced base class beyond Identity's own
+- An optional activation gate (`login` rejects inactive users)
+- Every endpoint gets a generic-500 safety net and DTO validation automatically
 
 ## Why this instead of `MapIdentityApi<TUser>`?
 
@@ -36,12 +61,23 @@ case: your own first-party client(s) authenticating directly against your own AP
 dotnet add package DGates.Identity.Jwt2Fa
 ```
 
-You'll also need an `IEmailSender` (`Microsoft.AspNetCore.Identity.UI.Services.IEmailSender`
-— used by registration, password reset, and email 2FA) and, if you use SMS 2FA, an
-`ISmsSender` — this package doesn't ship notification delivery itself.
 [`DGates.Identity.NotificationProviders`](https://github.com/dgates82/DGates.Identity.NotificationProviders)
-covers both in one package (SMTP/SendGrid/Postmark for email, Twilio/AWS SNS for SMS),
-or bring your own implementation of either interface.
+is a real, shipped dependency — installing this package already brings it in, you
+don't add it separately. It supplies the `ISmsSender` interface and concrete senders,
+but none are wired up automatically: registration and 2FA still need an
+`IEmailSender` (`Microsoft.AspNetCore.Identity.UI.Services.IEmailSender`) and, for
+SMS 2FA, an `ISmsSender` explicitly registered:
+
+```csharp
+builder.Services.AddSmtpEmailSender(builder.Configuration);
+// or: AddSendGridEmailSender / AddPostMarkEmailSender
+
+builder.Services.AddTwilioSmsSender(builder.Configuration);
+// or: AddSnsSmsSender
+```
+
+Register only one provider per channel — the last one registered wins for its
+interface. Or bring your own implementation of either interface instead.
 
 ## Usage
 
@@ -116,18 +152,48 @@ app.Run();
 ```
 
 Every `MapXyz` call takes an optional route prefix (default `"/auth"`), so both
-modules land under one consistent route tree if you use both.
+modules land under one route tree. The `AddAuthCore` projector delegate
+(`Func<TUser, object>`) controls what's embedded in the JWT's `"user"` claim and
+returned from auth responses — project down to what's safe to hand the client,
+never the raw `TUser`. Every issued JWT also carries a standard `ClaimTypes.Role`
+claim per role, so `[Authorize(Roles = "YourRole")]` works out of the box on your
+*own* endpoints too.
 
-The `AddAuthCore` projector delegate (`Func<TUser, object>`) controls what gets
-embedded in the JWT's `"user"` claim and returned from auth responses — project down
-to whatever's safe to hand the client, never the raw `TUser` (password hash,
-security stamp, etc.).
+## A login, concretely
 
-Every issued JWT also carries a standard `ClaimTypes.Role` claim for each of the
-user's roles, so `[Authorize(Roles = "YourRole")]` (or a `RequireRole` policy) works
-out of the box on your *own* app's endpoints and controllers — not just this
-package's. `Jwt2FaPolicies.AdminOnly`, which the admin endpoints use, is built the
-same way.
+`POST /auth/login` for a user in the `Admin` role, with the Full setup's projector
+above. Real output, fake data — `email`/`password` in, a 200 with a `user` object and
+a real signed JWT out:
+
+```json
+{
+  "isAuthSuccessful": true,
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "8ed87255-2dc6-478e-a413-57cf70e3a769",
+    "email": "jane.doe@example.com",
+    "twoFactorEnabled": false,
+    "roles": ["Admin"]
+  }
+}
+```
+
+The token's decoded payload — readable claims, not an opaque reference:
+
+```json
+{
+  "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier": "8ed87255-2dc6-478e-a413-57cf70e3a769",
+  "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name": "jane.doe@example.com",
+  "user": { "Id": "8ed87255...", "Email": "jane.doe@example.com", "TwoFactorEnabled": false, "Roles": ["Admin"] },
+  "http://schemas.microsoft.com/ws/2008/06/identity/claims/role": "Admin",
+  "exp": 1789992073,
+  "iss": "your-app",
+  "aud": "your-app-client"
+}
+```
+
+The `"user"` claim is whatever the projector returns; the separate role claim is
+what `[Authorize(Roles = "Admin")]` actually checks, issued independently of it.
 
 ## Configuration
 
@@ -144,131 +210,46 @@ same way.
     "ApplicationName": "Your App",
     "FrontendBaseUrl": "https://your-app.example.com",
     "EmailConfirmationPath": "/email-confirmation?userId={userId}&code={code}",
-    "ForgotPasswordPath": "/forgot-password/reset?userId={userId}&code={code}",
-    "MaxPageSize": 100
+    "ForgotPasswordPath": "/forgot-password/reset?userId={userId}&code={code}"
   }
 }
 ```
 
-`AdminRoleName` is the Identity role treated as "admin" — for the self-or-admin checks
-on endpoints like `getuserbyemail`, and for the `Jwt2FaPolicies.AdminOnly` policy the
-admin-only endpoints require — defaults to `"Admin"`, override if your app names it
-differently. `FrontendBaseUrl`
-(no trailing slash) is combined with the two path templates to build the links
-emailed to users — only the domain is configured once; the paths (and their
-`{userId}`/`{code}` tokens) can point at whatever routes your frontend actually uses.
-Both templates identify the account by `{userId}`, not email — `resetpassword` looks
-the user up by id, so your reset/setup page never needs to display, collect, or
-transmit an email address; the reset code is already cryptographically bound to a
-specific user.
-`MaxPageSize` (optional, defaults to 100) is the hard cap `listusers` clamps its
-`pageSize` query parameter to.
-
-### Customizing email/SMS copy
-
-Every email/SMS this package sends also has an overridable subject/body — six
-`*Subject`/`*Body` properties on `Jwt2FaAuthCoreConfig`, all optional and already
-defaulted to the wording shown below (so leaving them out changes nothing):
-
-```json
-{
-  "Jwt2FaAuthCoreConfig": {
-    "EmailConfirmationEmailSubject": "{applicationName} Email Confirmation",
-    "EmailConfirmationEmailBody": "In order to start using {applicationName}, you need to verify your email.<br/><br/>Please confirm your account by <a href='{link}'>clicking here</a>.<br/><br/>If you did not request a login to {applicationName}, please ignore this email.",
-    "AccountSetupEmailSubject": "{applicationName} Account Created",
-    "AccountSetupEmailBody": "An account has been created for you on {applicationName}.<br/><br/>Please confirm your account and set your password by <a href='{link}'>clicking here</a>.<br/><br/>If you were not expecting this, please ignore this email.",
-    "ForgotPasswordEmailSubject": "{applicationName} Password Reset",
-    "ForgotPasswordEmailBody": "Forgot your password?<br/>We received a request to reset the password for your account.<br/><br/>To reset your password <a href='{link}'>click here</a>.<br/><br/>If you did not request a password reset please ignore this email.",
-    "TwoFactorCodeEmailSubject": "{applicationName} 2FA Code",
-    "TwoFactorCodeEmailBody": "Your 2FA code is: {code}<br/><br/>If you did not request a 2FA code please ignore this email.",
-    "TwoFactorCodeSmsBody": "Your 2FA code for {applicationName} is: {code}. DO NOT share it with anyone."
-  }
-}
-```
-
-Each is a plain string with its own set of `{token}` placeholders, substituted the
-same way `EmailConfirmationPath`/`ForgotPasswordPath` are — `{applicationName}` and
-`{link}` on the email subjects/bodies, `{code}` on the 2FA ones. Override just the
-ones you need; no templating engine, no conditionals inside a single string —
-`AccountSetupEmailBody` is sent both by `admincreateuser` and by `forgotpassword`
-reissuing a first-login link (see below), so retext it once to cover both.
-`adminupdateuser`'s distinct email-changed notice isn't independently configurable
-yet.
+`FrontendBaseUrl` (no trailing slash) is combined with the two path templates to
+build the links emailed to users — only the domain is configured once. See
+[Configuration](https://github.com/dgates82/DGates.Identity.Jwt2Fa/blob/main/docs/CONFIGURATION.md)
+for `AdminRoleName`, `MaxPageSize`, and overriding email/SMS copy.
 
 ## Design: modules & capabilities
 
-Everything is generic over `TUser : IdentityUser`. Each module is opt-in and each
-capability beyond bare `IdentityUser` is its own small interface — skip a module,
-never see its interface; opt into one without the matching interface, and it's a
-compile error, not a silent no-op.
+Two opt-in modules (`AddAuthCore`/`MapAuthCore` and `Add2Fa`/`Map2Fa`). The 2FA
+module requires `IMultiFactorMethodUser` on your `TUser`; three other capability
+interfaces (activation gate, admin-provisioned accounts, role-aware lookups)
+optionally enhance core, with no loss of functionality if you skip them. Skip a
+module, never see its interface; opt into a module without its interface, and it's
+a compile error, not a silent no-op.
 
-Core also includes full user administration (list/get/create/update/unlock) —
-extracted alongside login/JWT logic because the source app's admin and auth concerns
-lived in the same two controllers (`AccountController`, `Admin/UserController`) and
-needed the same `TUser` genericization; splitting them into separate packages would
-have meant solving that problem twice.
+See [Design](https://github.com/dgates82/DGates.Identity.Jwt2Fa/blob/main/docs/DESIGN.md)
+for the full module table, admin endpoint behavior, and the three capability
+interfaces.
 
-| Module | Registration | Requires on `TUser` | Endpoints |
-|---|---|---|---|
-| Core | `AddAuthCore<TUser>()` + `MapAuthCore<TUser>()` | nothing extra (optionally honors `IActivationPolicy<TUser>` — see below) | register, login, secure, getuserbyemail, getuserbyid, listusers, admincreateuser, adminupdateuser, unlock, forgotpassword, resetpassword, changepassword, sendemailconfirmation, confirmemail |
-| Two-factor | `Add2Fa<TUser>()` + `Map2Fa<TUser>()` | `IMultiFactorMethodUser` | login2fa, sendtwofacode, enableauthenticator, verifyauthenticator, resetauthenticator |
+## Part of a small ecosystem
 
-**Admin endpoints** (`getuserbyid`, `listusers`, `admincreateuser`, `adminupdateuser`,
-`unlock`) require the `Jwt2FaPolicies.AdminOnly` policy — `AddAuthCore` registers it
-from the configured `AdminRoleName`, rather than the self-or-admin check
-`getuserbyemail` uses (there's no "self" case for browsing all users or creating one).
-Worth knowing:
-- `admincreateuser` mirrors `register` — it creates the account *and* sends the
-  confirmation/first-login email in one call. The generated temporary password is
-  discarded in favor of the emailed reset link; callers never see or need it.
-- `forgotpassword`, for an account that's confirmed its email but never set its own
-  password (an `IAdminProvisionableUser` still at `HasSetPassword: false`), reissues
-  that same first-login email rather than a generic password-reset one — lets you
-  build a "resend setup link" action for an admin-created account whose original
-  link went stale, without a separate endpoint.
-- `adminupdateuser` only touches identity concerns this package knows about — email
-  and role membership (a full-set diff against current roles, not a delta) — never
-  app-specific profile fields, which stay on your own update endpoint to avoid
-  mass-assignment risk. Changing the email re-sends a confirmation link, since
-  Identity resets `EmailConfirmed` on any email change.
-- `unlock` clears a locked-out user (`LockoutEnd` set to now) without resetting their
-  failed-attempt count — requires nothing beyond `IdentityUser`, since lockout is a
-  base Identity concept, not a capability interface.
-- `listusers`' `pageSize` is clamped to `AuthCoreOptions.MaxPageSize` (default 100)
-  regardless of what's requested — there's no "give me everyone" escape hatch.
-- Role claims are baked into a JWT at login time, so promoting a user to admin (or
-  editing roles via `adminupdateuser`) doesn't retroactively affect a token already
-  issued — they need to log in again.
+| Project | What it is | Reach for it when |
+| --- | --- | --- |
+| **DGates.Identity.Jwt2Fa** (you are here) | JWT issuance and multi-channel 2FA for ASP.NET Core Identity | you want real JWTs and TOTP/email/SMS 2FA on your own API |
+| [DGates.Identity.NotificationProviders](https://github.com/dgates82/DGates.Identity.NotificationProviders) ([NuGet](https://www.nuget.org/packages/DGates.Identity.NotificationProviders)) | Email and SMS senders (SendGrid, SMTP, Postmark, Twilio, SNS) | you need swappable notification providers |
+| [angular-dotnet-auth-template](https://github.com/dgates82/angular-dotnet-auth-template) | Angular 21 + .NET 10 starter with this package wired in, live demo, Cloud Run pipeline | you want a running app, not just the library |
+| [dgates-mock-servers](https://github.com/dgates82/dgates-mock-servers) | Public GHCR images mocking SendGrid, Twilio, and Postmark | you want to develop or test notification flows with no accounts |
 
-**Three capabilities layer on top of core as pure enhancements** — none are their own
-module, and core works fine with none registered:
-- **Optional activation gate.** Register an `IActivationPolicy<TUser>` — the built-in
-  `AddDefaultActivationPolicy<TUser>()` (requires `IActivatableUser`, a plain
-  `bool IsActive`) or your own for anything more complex — to make `login` reject
-  inactive users; `login` works the same with none registered.
-  `AddDefaultActivationPolicy<TUser>()` also registers `IUserActivationService<TUser>`;
-  pair it with `MapDefaultActivationPolicy<TUser>()` for `activate`/`deactivate` admin
-  endpoints that toggle `IsActive` directly. Both are scoped to the single-flag case —
-  a custom, non-boolean `IActivationPolicy<TUser>` doesn't get these endpoints (the
-  package can't know how to "activate" arbitrary logic) and should add its own.
-- **`IAdminProvisionableUser`** enhances two endpoints: if `TUser` implements it,
-  `resetpassword`/`sendemailconfirmation` handle the admin-created-account
-  first-login flow automatically. If not, both still work, just without it.
-- **`IRoleAwareUser`** enhances the admin lookup/list endpoints: `Jwt2FaUserProjector<TUser>`
-  is synchronous and can't call `UserManager.GetRolesAsync` itself, so `getuserbyid`/
-  `listusers` populate `TUser.Roles` before projecting, if implemented. If not, both
-  still work, just without roles populated.
+angular-dotnet-auth-template → DGates.Identity.Jwt2Fa → DGates.Identity.NotificationProviders → dgates-mock-servers (in dev)
 
-One thing worth knowing about `login2fa`: it lives in `Add2Fa`, not core, even though
-`login` (which reports a second factor is required) is core. Nothing else in the
-package can ever put a user into a 2FA-required state, so completing one is `Add2Fa`'s
-job specifically.
+This package depends on `DGates.Identity.NotificationProviders` `1.1.0`; reference
+a newer version directly in your own project if you want it.
 
-Every `MapXyz` route group carries two endpoint filters automatically, requiring no
-setup: an unhandled exception in any endpoint is logged and turned into a generic 500
-message rather than reaching the client, and request DTOs are validated
-(`System.ComponentModel.DataAnnotations`) with a 400 `ValidationProblem` on invalid
-input rather than whatever a malformed request happens to do further down.
+More from dgates82: [DGates.AwsSecretsManager](https://github.com/dgates82/DGates.AwsSecretsManager)
+and [dotnet-nuget-release-template](https://github.com/dgates82/dotnet-nuget-release-template),
+the template this package was scaffolded from.
 
 ## License
 
