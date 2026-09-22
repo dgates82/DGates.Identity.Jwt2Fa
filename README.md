@@ -244,9 +244,6 @@ interfaces.
 
 angular-dotnet-auth-template → DGates.Identity.Jwt2Fa → DGates.Identity.NotificationProviders → dgates-mock-servers (in dev)
 
-This package depends on `DGates.Identity.NotificationProviders` `1.1.0`; reference
-a newer version directly in your own project if you want it.
-
 More from dgates82: [DGates.AwsSecretsManager](https://github.com/dgates82/DGates.AwsSecretsManager)
 and [dotnet-nuget-release-template](https://github.com/dgates82/dotnet-nuget-release-template),
 the template this package was scaffolded from.
