@@ -25,7 +25,7 @@
     <ItemGroup>
       <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
       <PackageReference Include="Microsoft.AspNetCore.Identity.UI" Version="10.0.10" />
-      <PackageReference Include="DGates.Identity.NotificationProviders" Version="1.1.0" />
+      <PackageReference Include="DGates.Identity.NotificationProviders" Version="1.1.1" />
     </ItemGroup>
     <ItemGroup>
       <!-- Roslyn analyzer only — must never flow to consumers of the published package. -->
